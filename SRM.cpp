@@ -57,26 +57,82 @@ void Switch::Deactivate()
 	};
 };
 
-int Switch::GetPin()
-{
-	// Get the pin associated with the switch
-	return _pin;
-};
-
-// Bridge
-
 // SwitchState
 
-SwitchState::SwitchState(Switch** activeSwitches)
+SwitchState::SwitchState(Switch** activeSwitches, int nSwitches)
 {
 	// Switchstates takes an array of Switches, which can be activated in groups.
 	_activeSwitches = activeSwitches;
+	_nSwitches = nSwitches;
 };
 
-void SwitchState::AddSwitch(Switch* AddedSwitch)
+void SwitchState::InsertSwitchState(SwitchState* insertedState)
 {
-	// Add a switch to the switch array
+	insertedState->SetPrevious(this);
+	insertedState->SetNext(_next);
+	_next.SetPrevious(insertedState);
+	_next = insertedState;
+};
+
+
+void SwitchState::SetNext(SwitchState* insertedState)
+{
+	_next = insertedState;
+};
+
+void SwitchState::SetPrevious(SwitchState* insertedState)
+{
+	_previous = insertedState;
+};
+
+SwitchState* SwitchState::GetNext()
+{
+	return _next;
+};
+
+SwitchState* SwitchState::GetPrevious()
+{
+	return _previous;
+};
+
+int SwitchState::GetNumberOfSwitches()
+{
+	return _nSwitches;
+};
+
+Switch* SwitchState::GetSwitches()
+{
+	return _switches;
+};
+
+//Bridge
+
+Bridge::Bridge(int numberOfSwitches, Switch* switches)
+{
+	_nSwitches = numberOfSwitches;
+	_switches = switches;
+};
+
+void Bridge::TurnOff()
+{
+	for(int i = 0 ; i < _nSwitches ; i++)
+	{
+		_switches[i].Deactivate();
+	};
+};
+
+void Bridge::ActivateState(SwitchState* activatedState)
+{
+	int limit = activatedState.GetNumberOfSwitches();
+	Switch* tempSwitches = activatedState.GetSwitches();
+	this.TurnOff();
 	
+	for(int i = 0 ; i < limit ; i++)
+	{
+		tempSwitches[i].Activate();
+	};
 };
 
 // Controller
+
+// Needs to be implemented, Work in progress

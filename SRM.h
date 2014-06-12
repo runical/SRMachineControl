@@ -34,14 +34,13 @@ class Bridge
    * The abstract layer of the (a)symmetric bridge circuit used to drive the SRM.
    * It contains the switches and all of the possible states of the drive.
    * 
-   * The Bridge also keeps track of the current state and changes the state.
+   * The Bridge changes the state and resets all of the switches when needed.
    */
 
   public:
-    Bridge();
+    Bridge(int numberOfSwitches, Switch* switches);
     void ActivateState(SwitchState activatedState);
     void TurnOff();
-    Switch CreateSwitch(int PinNumber)
   private:
     int _nSwitches;
     Switch* _switches;
@@ -58,7 +57,6 @@ class Switch
      Switch(int pin);
      void Activate();
      void Deactivate();
-     int GetPin()
    private:
      int _pin;
      boolean _state;
@@ -74,12 +72,19 @@ class SwitchState
     */
 
    public:
-     SwitchState(Switch** activeSwitches);
-     void AddSwitch(Switch* AddedSwitch);
-     SwitchState* 
+     SwitchState(Switch** activeSwitches, int nSwitches);
+     SwitchState* GetNext();
+     SwitchState* GetPrevious();
+     void InsertSwitchState(SwitchState* insertedState);
+     void SetNext(SwitchState* inserterdState);
+     void SetPrevious(SwitchState* insertedState);
+     int GetNumberOfSwitches();
+     Switch* GetSwitch(int number);
    private:
      Switch** _activeSwitches;
-     int _numberOfSwitches;
+     int _nSwitches;
+     SwitchState* _next;
+     SwitchState* _previous;
 };
 
 class Controller
@@ -89,7 +94,7 @@ class Controller
     */
 
    public:
-     Controller(int AnalogPin);
+     Controller(int analogPin);
      void Logic();
      void AddState(SwitchState State);
      void CalculateOffset();
@@ -99,6 +104,6 @@ class Controller
      int _transitionPosition;
      Encoder _encoder;
      Bridge _bridge;
-     SwitchState _TopOfTheRing;
+     SwitchState _startState;
      SwitchState _currentState;
 };
