@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="12.2">
+  <zoom_level>10</zoom_level>
+  <element>
+    <type>com.umlet.element.Class</type>
+    <coordinates>
+      <x>80</x>
+      <y>380</y>
+      <w>220</w>
+      <h>200</h>
+    </coordinates>
+    <panel_attributes>Encoder
+--
+- _position : int
+--
++ read()
++ reset(NewPosition)
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <type>com.umlet.element.Class</type>
+    <coordinates>
+      <x>430</x>
+      <y>30</y>
+      <w>250</w>
+      <h>190</h>
+    </coordinates>
+    <panel_attributes>Controller
+--
+- _encoder : Encoder
+- _bridge : Bridge
+- _currentState : SwitchState
+- _offset : int
+- _offsetPin : int
+--
++ AddStateInSequence(SwitchState)
++ ControllerLogic()
+- GetOffset()
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <type>com.umlet.element.Relation</type>
+    <coordinates>
+      <x>160</x>
+      <y>190</y>
+      <w>310</w>
+      <h>210</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;-</panel_attributes>
+    <additional_attributes>290;30;290;110;30;110;30;190</additional_attributes>
+  </element>
+  <element>
+    <type>com.umlet.element.Class</type>
+    <coordinates>
+      <x>430</x>
+      <y>380</y>
+      <w>220</w>
+      <h>200</h>
+    </coordinates>
+    <panel_attributes>Bridge
+--
+- _switches : Switch[*]
+- _nSwitches : int
+--
++ ActivateState(SwitchState)
++ TurnOff()
+</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <type>com.umlet.element.Class</type>
+    <coordinates>
+      <x>430</x>
+      <y>670</y>
+      <w>220</w>
+      <h>190</h>
+    </coordinates>
+    <panel_attributes>Switch
+--
+- _pin : int
+- _state : bool
+--
++ Activate()
++ Deactivate()</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <type>com.umlet.element.Class</type>
+    <coordinates>
+      <x>820</x>
+      <y>380</y>
+      <w>220</w>
+      <h>200</h>
+    </coordinates>
+    <panel_attributes>SwitchState
+--
+- _switches : Switch[*]
+- _nSwitches : int
+- _nextState : SwitchState
+- _prevState : SwitchState
+--
++ SetSwitches(Switches, nSwitches)
++ AddStateToRing(State)
+- SetSequenceNumber(number)
++ SetNext(State)
++ SetPrev(State)</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <type>com.umlet.element.Relation</type>
+    <coordinates>
+      <x>510</x>
+      <y>190</y>
+      <w>50</w>
+      <h>210</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;-</panel_attributes>
+    <additional_attributes>30;30;30;190</additional_attributes>
+  </element>
+  <element>
+    <type>com.umlet.element.Relation</type>
+    <coordinates>
+      <x>620</x>
+      <y>190</y>
+      <w>330</w>
+      <h>210</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;-</panel_attributes>
+    <additional_attributes>30;30;30;110;310;110;310;190</additional_attributes>
+  </element>
+  <element>
+    <type>com.umlet.element.Relation</type>
+    <coordinates>
+      <x>510</x>
+      <y>550</y>
+      <w>50</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;-</panel_attributes>
+    <additional_attributes>30;30;30;120</additional_attributes>
+  </element>
+  <element>
+    <type>com.umlet.element.Relation</type>
+    <coordinates>
+      <x>620</x>
+      <y>550</y>
+      <w>330</w>
+      <h>260</h>
+    </coordinates>
+    <panel_attributes>lt=--
+m1=0..n
+m2=0..1
+</panel_attributes>
+    <additional_attributes>30;240;310;240;310;30</additional_attributes>
+  </element>
+</diagram>
