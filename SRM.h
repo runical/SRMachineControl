@@ -94,10 +94,10 @@ class Controller
     */
 
    public:
-     Controller();
+     Controller(SwitchState* topState, Bridge* theBridge);
      void Logic();
      void CalculateOffset();
-     void CalculateTransitions();
+     void CalculateTransitions(int numberOfElectricRevPerMechRev, int nStates);
    private:
      void ActivateNextState();
      void ActivatePreviousState();

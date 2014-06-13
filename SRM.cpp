@@ -161,4 +161,7 @@ void Controller::CalculateOffset()
 	return;
 };
 
-void Controller::
+void Controller::CalculateTransitions(int numberOfElectricRevPerMechRev, int nStates)
+{
+	return;
+}
