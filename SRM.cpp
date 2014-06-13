@@ -136,3 +136,29 @@ void Bridge::ActivateState(SwitchState* activatedState)
 // Controller
 
 // Needs to be implemented, Work in progress
+
+Controller::Controller(SwitchState* topState, Bridge* theBridge)
+{
+	_startState = topState;
+	_currentState = topState;
+	_bridge = theBridge;
+};
+
+void Controller::ActivateNextState()
+{
+	_currentState = _currentState.GetNext();
+	_bridge.ActivateState(_currentState);
+};
+
+void Controller::ActivatePreviousState()
+{
+	_currentState = _currentState.GetPrevious();
+	_bridge.ActivateState(_currentState);
+};
+
+void Controller::CalculateOffset()
+{
+	return;
+};
+
+void Controller::

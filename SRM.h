@@ -39,7 +39,7 @@ class Bridge
 
   public:
     Bridge(int numberOfSwitches, Switch* switches);
-    void ActivateState(SwitchState activatedState);
+    void ActivateState(SwitchState* activatedState);
     void TurnOff();
   private:
     int _nSwitches;
@@ -94,16 +94,16 @@ class Controller
     */
 
    public:
-     Controller(int analogPin);
+     Controller();
      void Logic();
-     void AddState(SwitchState State);
      void CalculateOffset();
-     void UpdateTransition();
+     void CalculateTransitions();
    private:
-     int _analogPin;
+     void ActivateNextState();
+     void ActivatePreviousState();
      int _transitionPosition;
      Encoder _encoder;
      Bridge _bridge;
-     SwitchState _startState;
-     SwitchState _currentState;
+     SwitchState* _startState;
+     SwitchState* _currentState;
 };
