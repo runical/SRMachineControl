@@ -1,5 +1,5 @@
 /*
-  SRM.cpp - Library for controlling a SR machine with an Arduino Due.
+  SRMachineControl.cpp - Library for controlling a SR machine with an Arduino Due.
  
   Copyright (c) 2014 Peter van den Hurk
 
@@ -22,58 +22,63 @@
   THE SOFTWARE.
 */
 
-#include <stdlib.h>     /* malloc, free, rand */
 #include "Arduino.h"
 #include "SRM.h"
+#include "Encoder.h"
 
-// Switch
+//////////////////////////////////////////
+// 				PhysicalSwitch			//
+//////////////////////////////////////////
 
-Switch::Switch(int pin)
+PhysicalSwitch::PhysicalSwitch(int pin)
 {
-	// Switch sets the pin mode to output, inits it to low and saves the pin.
+	// PhysicalSwitch sets the pin mode to output, inits it to low and saves the pin.
 	pinMode(pin, OUTPUT);
 	digitalWrite(pin, LOW);
-	_state = false;
-	_pin = pin;
+	this->_state = false;
+	this->_pin = pin;
 };
 
-void Switch::Activate()
+void PhysicalSwitch::Activate()
 {
 	// Activate a switch
-	if(not _state)
+	if(not this->_state)
 	{
 		digitalWrite(_pin, HIGH);
-		_state = true;
+		this->_state = true;
 	};
+	#IFDEF DEBUG
+		
 };
 
-void Switch::Deactivate()
+void PhysicalSwitch::Deactivate()
 {
 	// Deactivate a switch
-	if(_state)
+	if(this->_state)
 	{
 		digitalWrite(_pin, LOW);
-		_state = false;
+		this->_state = false;
 	};
 };
 
-// SwitchState
+//////////////////////////////////////////
+// 				SwitchState				//
+//////////////////////////////////////////
 
-SwitchState::SwitchState(Switch** activeSwitches, int nSwitches)
+SwitchState::SwitchState(PhysicalSwitch** activeSwitches, int nSwitches)
 {
 	// Switchstates takes an array of Switches, which can be activated in groups.
-	_activeSwitches = activeSwitches;
-	_nSwitches = nSwitches;
+	this->_activeSwitches = activeSwitches;
+	this->_nSwitches = nSwitches;
 };
 
 void SwitchState::InsertSwitchState(SwitchState* insertedState)
 {
 	insertedState->SetPrevious(this);
-	insertedState->SetNext(_next);
-	_next.SetPrevious(insertedState);
+	insertedState->SetNext(this->_next);
+	_next->SetPrevious(insertedState);
 	_next = insertedState;
 };
-
 
 void SwitchState::SetNext(SwitchState* insertedState)
 {
@@ -100,14 +105,16 @@ int SwitchState::GetNumberOfSwitches()
 	return _nSwitches;
 };
 
-Switch* SwitchState::GetSwitches()
+PhysicalSwitch** SwitchState::GetSwitches()
 {
-	return _switches;
+	return _activeSwitches;
 };
 
-//Bridge
+//////////////////////////////////////////
+//				Bridge					//
+//////////////////////////////////////////
 
-Bridge::Bridge(int numberOfSwitches, Switch* switches)
+Bridge::Bridge(int numberOfSwitches, PhysicalSwitch** switches)
 {
 	_nSwitches = numberOfSwitches;
 	_switches = switches;
@@ -117,23 +124,25 @@ void Bridge::TurnOff()
 {
 	for(int i = 0 ; i < _nSwitches ; i++)
 	{
-		_switches[i].Deactivate();
+		_switches[i]->Deactivate();
 	};
 };
 
 void Bridge::ActivateState(SwitchState* activatedState)
 {
-	int limit = activatedState.GetNumberOfSwitches();
-	Switch* tempSwitches = activatedState.GetSwitches();
-	this.TurnOff();
+	int limit = activatedState->GetNumberOfSwitches();
+	PhysicalSwitch** tempSwitches = activatedState->GetSwitches();
+	this->TurnOff();
 	
 	for(int i = 0 ; i < limit ; i++)
 	{
-		tempSwitches[i].Activate();
+		tempSwitches[i]->Activate();
 	};
 };
 
-// Controller
+//////////////////////////////////////////
+// 				Controller				//
+//////////////////////////////////////////
 
 // Needs to be implemented, Work in progress
 
@@ -146,14 +155,14 @@ Controller::Controller(SwitchState* topState, Bridge* theBridge)
 
 void Controller::ActivateNextState()
 {
-	_currentState = _currentState.GetNext();
-	_bridge.ActivateState(_currentState);
+	_currentState = _currentState->GetNext();
+	_bridge->ActivateState(_currentState);
 };
 
 void Controller::ActivatePreviousState()
 {
-	_currentState = _currentState.GetPrevious();
-	_bridge.ActivateState(_currentState);
+	_currentState = _currentState->GetPrevious();
+	_bridge->ActivateState(_currentState);
 };
 
 void Controller::CalculateOffset()

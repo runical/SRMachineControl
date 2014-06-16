@@ -1,5 +1,5 @@
 /*
-  SRM.h - Library for controlling a SR machine with an Arduino Due.
+  SRMachineControl.h - Library for controlling a SR machine with an Arduino Due.
   Requires the Encoder Library
  
   Copyright (c) 2014 Peter van den Hurk
@@ -23,38 +23,21 @@
   THE SOFTWARE.
 */
 
-#ifndef SRM_h
-#define SRM_h
+//#ifndef SRM_h_
+//#define SRM_h_
 
 #include "Arduino.h"
+#include "Encoder.h"
 
-class Bridge
+class PhysicalSwitch
 {
-  /* Bridge:
-   * The abstract layer of the (a)symmetric bridge circuit used to drive the SRM.
-   * It contains the switches and all of the possible states of the drive.
-   * 
-   * The Bridge changes the state and resets all of the switches when needed.
-   */
-
-  public:
-    Bridge(int numberOfSwitches, Switch* switches);
-    void ActivateState(SwitchState* activatedState);
-    void TurnOff();
-  private:
-    int _nSwitches;
-    Switch* _switches;
-};
-
-class Switch
-{
-   /* Switch:
+   /* PhysicalSwitch:
     * The abstraction of a switch in the bridge circuit.
     * Can be activated, deactivated and the associated pin can be extracted.
     */
 
    public:
-     Switch(int pin);
+     PhysicalSwitch(int pin);
      void Activate();
      void Deactivate();
    private:
@@ -72,19 +55,37 @@ class SwitchState
     */
 
    public:
-     SwitchState(Switch** activeSwitches, int nSwitches);
+     SwitchState(PhysicalSwitch** activeSwitches, int nSwitches);
      SwitchState* GetNext();
      SwitchState* GetPrevious();
      void InsertSwitchState(SwitchState* insertedState);
      void SetNext(SwitchState* inserterdState);
      void SetPrevious(SwitchState* insertedState);
      int GetNumberOfSwitches();
-     Switch* GetSwitch(int number);
+     PhysicalSwitch** GetSwitches();
    private:
-     Switch** _activeSwitches;
+     PhysicalSwitch** _activeSwitches;
      int _nSwitches;
      SwitchState* _next;
      SwitchState* _previous;
+};
+
+class Bridge
+{
+  /* Bridge:
+   * The abstract layer of the (a)symmetric bridge circuit used to drive the SRM.
+   * It contains the switches and all of the possible states of the drive.
+   * 
+   * The Bridge changes the state and resets all of the switches when needed.
+   */
+
+  public:
+    Bridge(int numberOfSwitches, PhysicalSwitch** switches);
+    void ActivateState(SwitchState* activatedState);
+    void TurnOff();
+  private:
+    int _nSwitches;
+    PhysicalSwitch** _switches;
 };
 
 class Controller
@@ -102,8 +103,8 @@ class Controller
      void ActivateNextState();
      void ActivatePreviousState();
      int _transitionPosition;
-     Encoder _encoder;
-     Bridge _bridge;
+     Encoder* _encoder;
+     Bridge* _bridge;
      SwitchState* _startState;
      SwitchState* _currentState;
 };
