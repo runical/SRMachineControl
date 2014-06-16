@@ -22,6 +22,8 @@
   THE SOFTWARE.
 */
 
+#define DEBUG 1
+
 #include "Arduino.h"
 #include "SRM.h"
 #include "Encoder.h"
@@ -37,6 +39,10 @@ PhysicalSwitch::PhysicalSwitch(int pin)
 	digitalWrite(pin, LOW);
 	this->_state = false;
 	this->_pin = pin;
+	#ifdef DEBUG
+		Serial.print("Switch initialized on pin ");
+		Serial.println(_pin);
+	#endif
 };
 
 void PhysicalSwitch::Activate()
@@ -46,8 +52,15 @@ void PhysicalSwitch::Activate()
 	{
 		digitalWrite(_pin, HIGH);
 		this->_state = true;
+		#ifdef DEBUG
+			Serial.print("Activated switch");
+			Serial.println(_pin);
+		#endif
 	};
-	#IFDEF DEBUG
+	#ifdef DEBUG
+		if(_state)
+			Serial.println("Switch was already on.");
+	#endif
 		
 };
 
@@ -58,7 +71,15 @@ void PhysicalSwitch::Deactivate()
 	{
 		digitalWrite(_pin, LOW);
 		this->_state = false;
+		#ifdef DEBUG
+			Serial.print("Deactivated switch");
+			Serial.println(_pin);
+		#endif
 	};
+	#ifdef DEBUG
+		if(_state)
+			Serial.println("Switch was already off.");
+	#endif
 };
 
 //////////////////////////////////////////
@@ -70,6 +91,11 @@ SwitchState::SwitchState(PhysicalSwitch** activeSwitches, int nSwitches)
 	// Switchstates takes an array of Switches, which can be activated in groups.
 	this->_activeSwitches = activeSwitches;
 	this->_nSwitches = nSwitches;
+	#ifdef DEBUG
+		Serial.print("SwitchState initialized with ");
+		Serial.print(_nSwitches);
+		Serial.println("switches");
+	#endif
 };
 
 void SwitchState::InsertSwitchState(SwitchState* insertedState)
@@ -118,14 +144,26 @@ Bridge::Bridge(int numberOfSwitches, PhysicalSwitch** switches)
 {
 	_nSwitches = numberOfSwitches;
 	_switches = switches;
+	
+	#ifdef DEBUG
+		Serial.print("Bridge initialized with ");
+		Serial.print(_nSwitches);
+		Serial.println("switches");
+	#endif
 };
 
 void Bridge::TurnOff()
 {
+	#ifdef DEBUG
+		Serial.println("Starting with deactivation of switches.");
+	#endif
 	for(int i = 0 ; i < _nSwitches ; i++)
 	{
 		_switches[i]->Deactivate();
 	};
+	#ifdef DEBUG
+		Serial.println("Switches deactivated.");
+	#endif
 };
 
 void Bridge::ActivateState(SwitchState* activatedState)
@@ -151,6 +189,9 @@ Controller::Controller(SwitchState* topState, Bridge* theBridge)
 	_startState = topState;
 	_currentState = topState;
 	_bridge = theBridge;
+	#ifdef DEBUG
+		Serial.println("Controller initialized");
+	#endif
 };
 
 void Controller::ActivateNextState()
