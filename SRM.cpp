@@ -88,6 +88,8 @@ SwitchState::SwitchState(PhysicalSwitch** activeSwitches, int nSwitches)
 	// Switchstates takes an array of Switches, which can be activated in groups.
 	this->_activeSwitches = activeSwitches;
 	this->_nSwitches = nSwitches;
+	this->_next = this;
+	this->_previous = this;
 	#ifdef DEBUG
 		Serial.begin(9600);
 		Serial.print("SwitchState initialized with ");
