@@ -22,7 +22,7 @@
   THE SOFTWARE.
 */
 
-#define DEBUG 1
+// #define DEBUG 1
 
 #include "Arduino.h"
 #include "SRM.h"
@@ -34,14 +34,16 @@
 
 PhysicalSwitch::PhysicalSwitch(int pin)
 {
-	// PhysicalSwitch sets the pin mode to output, inits it to low and saves the pin.
+	// PhysicalSwitch sets the pin mode to output, inits it to low and saves the pin number.
 	pinMode(pin, OUTPUT);
 	digitalWrite(pin, LOW);
 	this->_state = false;
 	this->_pin = pin;
 	#ifdef DEBUG
+		Serial.begin(9600);
 		Serial.print("Switch initialized on pin ");
 		Serial.println(_pin);
+		Serial.end();
 	#endif
 };
 
@@ -53,15 +55,12 @@ void PhysicalSwitch::Activate()
 		digitalWrite(_pin, HIGH);
 		this->_state = true;
 		#ifdef DEBUG
+			Serial.begin(9600);
 			Serial.print("Activated switch");
 			Serial.println(_pin);
+			Serial.end();
 		#endif
-	};
-	#ifdef DEBUG
-		if(_state)
-			Serial.println("Switch was already on.");
-	#endif
-		
+	};		
 };
 
 void PhysicalSwitch::Deactivate()
@@ -72,14 +71,12 @@ void PhysicalSwitch::Deactivate()
 		digitalWrite(_pin, LOW);
 		this->_state = false;
 		#ifdef DEBUG
+			Serial.begin(9600);
 			Serial.print("Deactivated switch");
 			Serial.println(_pin);
+			Serial.end();
 		#endif
 	};
-	#ifdef DEBUG
-		if(_state)
-			Serial.println("Switch was already off.");
-	#endif
 };
 
 //////////////////////////////////////////
@@ -92,9 +89,11 @@ SwitchState::SwitchState(PhysicalSwitch** activeSwitches, int nSwitches)
 	this->_activeSwitches = activeSwitches;
 	this->_nSwitches = nSwitches;
 	#ifdef DEBUG
+		Serial.begin(9600);
 		Serial.print("SwitchState initialized with ");
 		Serial.print(_nSwitches);
 		Serial.println("switches");
+		Serial.end();
 	#endif
 };
 
@@ -146,15 +145,18 @@ Bridge::Bridge(int numberOfSwitches, PhysicalSwitch** switches)
 	_switches = switches;
 	
 	#ifdef DEBUG
+		Serial.begin(9600);
 		Serial.print("Bridge initialized with ");
 		Serial.print(_nSwitches);
 		Serial.println("switches");
+		Serial.end();
 	#endif
 };
 
 void Bridge::TurnOff()
 {
 	#ifdef DEBUG
+		Serial.begin(9600);
 		Serial.println("Starting with deactivation of switches.");
 	#endif
 	for(int i = 0 ; i < _nSwitches ; i++)
@@ -163,6 +165,7 @@ void Bridge::TurnOff()
 	};
 	#ifdef DEBUG
 		Serial.println("Switches deactivated.");
+		Serial.end();
 	#endif
 };
 
@@ -190,7 +193,9 @@ Controller::Controller(SwitchState* topState, Bridge* theBridge)
 	_currentState = topState;
 	_bridge = theBridge;
 	#ifdef DEBUG
+		Serial.begin(9600);
 		Serial.println("Controller initialized");
+		Serial.end();
 	#endif
 };
 
