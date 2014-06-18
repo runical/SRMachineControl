@@ -48,6 +48,16 @@ PhysicalSwitch::PhysicalSwitch(int pin)
 
 void PhysicalSwitch::Activate()
 {
+	#ifdef DEBUG
+	
+	printf("Switch on pin %i has state %i\n", this->_pin, this->_state);
+	
+	if(this->_state)
+	{
+		printf("Switch on pin %i already activated (state %i)\n", _pin, _state);
+	};
+	#endif
+	
 	// Activate a switch
 	if(not this->_state)
 	{
@@ -55,13 +65,26 @@ void PhysicalSwitch::Activate()
 		this->_state = true;
 		
 		#ifdef DEBUG
-			printf("Activated switch on pin %i \n", _pin);
+			printf("Activated switch on pin %i (state %i)\n", _pin, _state);
 		#endif
-	};		
+	};
+	
+	#ifdef DEBUG
+		printf("Switch on pin %i has state %i\n", this->_pin, this->_state);
+	#endif
 };
 
 void PhysicalSwitch::Deactivate()
 {
+	#ifdef DEBUG
+	printf("Switch on pin %i has state %i\n", this->_pin, this->_state);
+	
+	if(not this->_state)
+	{
+		printf("Switch on pin %i already deactivated (state %i)\n", _pin, _state);
+	};
+	#endif
+	
 	// Deactivate a switch
 	if(this->_state)
 	{
@@ -69,9 +92,14 @@ void PhysicalSwitch::Deactivate()
 		this->_state = false;
 		
 		#ifdef DEBUG
-			printf("Deactivated switch on pin %i \n", _pin);
+			printf("Deactivated switch on pin %i (state %i)\n", _pin, _state);
 		#endif
 	};
+	
+	#ifdef DEBUG
+		printf("Switch on pin %i has state %i\n", this->_pin, this->_state);
+	#endif
+	
 };
 
 //////////////////////////////////////////
@@ -93,20 +121,32 @@ SwitchState::SwitchState(PhysicalSwitch** activeSwitches, int nSwitches)
 
 void SwitchState::InsertSwitchState(SwitchState* insertedState)
 {
+	#ifdef DEBUG
+		printf("Start adding switchstate\n");
+	#endif
 	insertedState->SetPrevious(this);
 	insertedState->SetNext(this->_next);
 	_next->SetPrevious(insertedState);
-	_next = insertedState;
+	this->SetNext(insertedState);
+	#ifdef DEBUG
+		printf("Added SwitchState\n");
+	#endif
 };
 
 void SwitchState::SetNext(SwitchState* insertedState)
 {
 	_next = insertedState;
+	#ifdef DEBUG
+		printf("Set next\n");
+	#endif
 };
 
 void SwitchState::SetPrevious(SwitchState* insertedState)
 {
 	_previous = insertedState;
+	#ifdef DEBUG
+		printf("Set previous\n");
+	#endif
 };
 
 SwitchState* SwitchState::GetNext()
@@ -189,11 +229,12 @@ void Bridge::ActivateState(SwitchState* activatedState)
 
 // Needs to be implemented, Work in progress
 
-Controller::Controller(SwitchState* topState, Bridge* theBridge)
+Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder)
 {
-	_startState = topState;
-	_currentState = topState;
-	_bridge = theBridge;
+	this->_startState = topState;
+	this->_currentState = topState;
+	this->_bridge = theBridge;
+	this->_encoder = theEncoder;
 	#ifdef DEBUG
 		printf("Controller initialized\n");
 	#endif
@@ -201,14 +242,14 @@ Controller::Controller(SwitchState* topState, Bridge* theBridge)
 
 void Controller::ActivateNextState()
 {
-	_currentState = _currentState->GetNext();
-	_bridge->ActivateState(_currentState);
+	this->_currentState = this->_currentState->GetNext();
+	this->_bridge->ActivateState(this->_currentState);
 };
 
 void Controller::ActivatePreviousState()
 {
-	_currentState = _currentState->GetPrevious();
-	_bridge->ActivateState(_currentState);
+	this->_currentState = this->_currentState->GetPrevious();
+	this->_bridge->ActivateState(this->_currentState);
 };
 
 void Controller::CalculateOffset()
@@ -219,4 +260,10 @@ void Controller::CalculateOffset()
 void Controller::CalculateTransitions(int numberOfElectricRevPerMechRev, int nStates)
 {
 	return;
-}
+};
+
+void Controller::Logic()
+{
+	this->ActivatePreviousState();
+	return;
+};

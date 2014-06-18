@@ -58,7 +58,7 @@ class SwitchState
      SwitchState* GetNext();
      SwitchState* GetPrevious();
      void InsertSwitchState(SwitchState* insertedState);
-     void SetNext(SwitchState* inserterdState);
+     void SetNext(SwitchState* insertedState);
      void SetPrevious(SwitchState* insertedState);
      int GetNumberOfSwitches();
      PhysicalSwitch** GetSwitches();
@@ -94,7 +94,7 @@ class Controller
     */
 
    public:
-     Controller(SwitchState* topState, Bridge* theBridge);
+     Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder);
      void Logic();
      void CalculateOffset();
      void CalculateTransitions(int numberOfElectricRevPerMechRev, int nStates);
