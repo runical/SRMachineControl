@@ -26,7 +26,6 @@
 //#ifndef SRM_h_
 //#define SRM_h_
 
-#include "Arduino.h"
 #include "Encoder.h"
 
 class PhysicalSwitch
@@ -42,7 +41,7 @@ class PhysicalSwitch
      void Deactivate();
    private:
      int _pin;
-     boolean _state;
+     bool _state;
 };
 
 class SwitchState
