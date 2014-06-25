@@ -170,7 +170,7 @@ Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEnc
 	this->_bridge = theBridge;
 	this->_encoder = theEncoder;
 	
-	this->_transitionposition = {0, 0};
+	this->_transitionPosition = {0, 0};
 	this->_pulsesPerRev = pulsesPerRev;
     this->_eRevPerMRev = eRevPerMRev;
     this->_nStates = nStates;
@@ -199,7 +199,7 @@ void Controller::CalculateOffset()
 	return;
 };
 
-void Controller::CalculateTransition()
+void Controller::CalculateTransitions()
 {
 	// Calculation of the new transition point, given by the pulses per revolution, number of states and the difference in electrical and mechanical speeds.
 	// First, save the old number to make transitioning past 0 possible.
@@ -207,7 +207,7 @@ void Controller::CalculateTransition()
 	
 	// Then calculate and make a transition past 0
 	this->_transitionPosition[1] = this->_transitionPosition[1] + ((float) this->_pulsesPerRev/(this->_eRevPerMRev*this->_nStates));
-	if this->_transitionPosition[1] >= this->pulsesPerRev
+	if (this->_transitionPosition[1] >= this->pulsesPerRev)
 		this->_transitionPosition[1] = this->_transitionPosition[1] - this->pulsesPerRev;
 	return;
 };
@@ -222,9 +222,9 @@ void Controller::Logic()
 	int step;
 	
 	// The decision tree for the transition. Setp = 1 -> transition.
-	if this->_transitionPosition[0] < this->_transitionPosition[1]
+	if (this->_transitionPosition[0] < this->_transitionPosition[1])
 	{
-		if virtualposition >= this->_transitionPosition[1]
+		if (virtualposition >= this->_transitionPosition[1])
 		{
 			step = 1;
 		}
@@ -235,7 +235,7 @@ void Controller::Logic()
 	}
 	else
 	{
-		if virtualposition >= this->_transitionPosition[1] && virtualposition < this->_transitionPosition[0]
+		if (virtualposition >= this->_transitionPosition[1] && virtualposition < this->_transitionPosition[0])
 		{
 			step = 1;
 		}
@@ -257,7 +257,7 @@ void Controller::Logic()
 				this->ActivateNextState();
 				break;
 		}
-		this->CalculateTransition();
+		this->CalculateTransitions();
 	}
 	
 	return;
@@ -266,7 +266,7 @@ void Controller::Logic()
 void Controller::Pause()
 {
 	// The pause function, which behaves more like a start/stop.
-	if this->_paused == 0
+	if (this->_paused == 0)
 	{
 		this->_bridge->TurnOff();
 		this->_paused = 1;
