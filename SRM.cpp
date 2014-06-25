@@ -251,7 +251,7 @@ void Controller::Logic()
 		switch (this->_paused)
 		{
 			case 1:
-				this->_currentState = this->_currentState->getNext();
+				this->_currentState = this->_currentState->GetNext();
 				break;
 			case 0:
 				this->ActivateNextState();
