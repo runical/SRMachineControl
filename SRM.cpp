@@ -207,8 +207,8 @@ void Controller::CalculateTransitions()
 	
 	// Then calculate and make a transition past 0
 	this->_transitionPosition[1] = this->_transitionPosition[1] + ((float) this->_pulsesPerRev/(this->_eRevPerMRev*this->_nStates));
-	if (this->_transitionPosition[1] >= this->pulsesPerRev)
-		this->_transitionPosition[1] = this->_transitionPosition[1] - this->pulsesPerRev;
+	if (this->_transitionPosition[1] >= this->_pulsesPerRev)
+		this->_transitionPosition[1] = this->_transitionPosition[1] - this->_pulsesPerRev;
 	return;
 };
 
@@ -251,7 +251,7 @@ void Controller::Logic()
 		switch (this->_paused)
 		{
 			case 1:
-				this->currentState = this->_currentState->getNextState();
+				this->_currentState = this->_currentState->getNext();
 				break;
 			case 0:
 				this->ActivateNextState();
