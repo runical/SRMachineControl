@@ -273,7 +273,7 @@ void Controller::Pause()
 	}
 	else
 	{
-		this->_bridge->ActivateState(this->_currentState)
+		this->_bridge->ActivateState(this->_currentState);
 		this->_paused = 0;
 	}
 }
