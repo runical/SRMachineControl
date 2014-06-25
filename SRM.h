@@ -94,14 +94,19 @@ class Controller
     */
 
    public:
-     Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder);
+     Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int nStates, int eRevPerMRev, int pulsesPerRev);
      void Logic();
      void CalculateOffset();
-     void CalculateTransitions(int numberOfElectricRevPerMechRev, int nStates);
+     void CalculateTransitions();
+     void Pause();     
    private:
      void ActivateNextState();
      void ActivatePreviousState();
-     int _transitionPosition;
+     float _transitionPosition;
+     int _pulsesPerRev;
+     int _eRevPerMRev;
+     int _nStates;
+     int _paused;
      Encoder* _encoder;
      Bridge* _bridge;
      SwitchState* _startState;

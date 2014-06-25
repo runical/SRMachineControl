@@ -22,8 +22,8 @@
   THE SOFTWARE.
 */
 
-#include "arduino.h"
-#include <stdio.h>
+//#include "arduino.h"
+
 #include "SRM.h"
 
 //////////////////////////////////////////
@@ -151,13 +151,20 @@ void Bridge::ActivateState(SwitchState* activatedState)
 
 // The controller implements the logic
 
-Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder)
+Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int nStates, int eRevPerMRev, int pulsesPerRev)
 {
 	// Init with the top state.
 	this->_startState = topState;
 	this->_currentState = topState;
 	this->_bridge = theBridge;
 	this->_encoder = theEncoder;
+	
+	this->_transitionposition = 0;
+	this->_pulsesPerRev = pulsesPerRev;
+    this->_eRevPerMRev = eRevPerMRev;
+    this->_nStates = nStates;
+    
+    this->_paused = 0;
 };
 
 void Controller::ActivateNextState()
@@ -174,19 +181,48 @@ void Controller::ActivatePreviousState()
 
 void Controller::CalculateOffset()
 {
-	// Calculation of the offset (rethink how this is integrated with the system)
+	// Calculation of the offset (What the hell is this supposed to be?)
 	return;
 };
 
-void Controller::CalculateTransitions(int numberOfElectricRevPerMechRev, int nStates)
+void Controller::CalculateTransition()
 {
-	// Calculation of the transition points
+	// Calculation of the new transition point.
+	this->_transitionPosition = this->_transitionPosition + ((float) this->_pulsesPerRev/(this->_eRevPerMRev*this->_nStates));
+	if this->_transitionPosition >= this->pulsesPerRev
+		this->_transitionPosition = this->_transitionPosition - this->pulsesPerRev;
 	return;
 };
 
 void Controller::Logic()
 {
 	// The controller logic. Needs to be implemented/thought out.
-	this->ActivatePreviousState();
+	if this->_transitionposition <= this->_encoder->read()
+	{
+		if this->_paused == 1
+		{
+			this->currentState = this->_currentState->getNextState();
+		}
+		else
+		{
+			this->ActivateNextState();
+		}
+		
+		this->CalculateTransition();
+	}
 	return;
 };
+
+void Controller::Pause()
+{
+	if this->_paused == 0
+	{
+		this->_bridge->TurnOff();
+		this->_paused = 1;
+	}
+	else
+	{
+		this->_bridge->ActivateState(this->_currentState)
+		this->_paused = 0;
+	}
+}
