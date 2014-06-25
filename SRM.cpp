@@ -175,8 +175,8 @@ Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEnc
     this->_eRevPerMRev = eRevPerMRev;
     this->_nStates = nStates;
     
-    // The systems starts paused
-    this->_paused = 1;
+    // The systems starts unpaused (but will usually change to paused because of the interrupt)
+    this->_paused = 0;
 };
 
 void Controller::ActivateNextState()
