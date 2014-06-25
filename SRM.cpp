@@ -75,6 +75,7 @@ SwitchState::SwitchState(PhysicalSwitch** activeSwitches, int nSwitches)
 
 void SwitchState::InsertSwitchState(SwitchState* insertedState)
 {
+	// Function for the ring. This inserts a state after this state.
 	insertedState->SetPrevious(this);
 	insertedState->SetNext(this->_next);
 	_next->SetPrevious(insertedState);
@@ -83,31 +84,37 @@ void SwitchState::InsertSwitchState(SwitchState* insertedState)
 
 void SwitchState::SetNext(SwitchState* insertedState)
 {
+	// set the _next variable
 	_next = insertedState;
 };
 
 void SwitchState::SetPrevious(SwitchState* insertedState)
 {
+	// set the _previous variable
 	_previous = insertedState;
 };
 
 SwitchState* SwitchState::GetNext()
 {
+	// get the _next variable
 	return _next;
 };
 
 SwitchState* SwitchState::GetPrevious()
 {
+	// get the _previous variable
 	return _previous;
 };
 
 int SwitchState::GetNumberOfSwitches()
 {
+	// get the number of switches (in _nSwitches variable)
 	return _nSwitches;
 };
 
 PhysicalSwitch** SwitchState::GetSwitches()
 {
+	// Get the switches associated with the variable
 	return _activeSwitches;
 };
 
@@ -117,12 +124,14 @@ PhysicalSwitch** SwitchState::GetSwitches()
 
 Bridge::Bridge(int numberOfSwitches, PhysicalSwitch** switches)
 {
+	// Initialize the Bridge. It takes all of the switches associated with the bridge.
 	_nSwitches = numberOfSwitches;
 	_switches = switches;
 };
 
 void Bridge::TurnOff()
 {
+	// Turn off the switches associated with this bridge.
 	int i;
 	
 	for(i = 0 ; i < _nSwitches ; i++)
@@ -133,6 +142,8 @@ void Bridge::TurnOff()
 
 void Bridge::ActivateState(SwitchState* activatedState)
 {
+	// Activate the switches associated with the given state
+	// Next version might include matching with bridge associated switches
 	int limit = activatedState->GetNumberOfSwitches();
 	PhysicalSwitch** tempSwitches = activatedState->GetSwitches();
 	this->TurnOff();
@@ -153,28 +164,31 @@ void Bridge::ActivateState(SwitchState* activatedState)
 
 Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int nStates, int eRevPerMRev, int pulsesPerRev)
 {
-	// Init with the top state.
+	// Init with all of the variables
 	this->_startState = topState;
 	this->_currentState = topState;
 	this->_bridge = theBridge;
 	this->_encoder = theEncoder;
 	
-	this->_transitionposition = 0;
+	this->_transitionposition = {0, 0};
 	this->_pulsesPerRev = pulsesPerRev;
     this->_eRevPerMRev = eRevPerMRev;
     this->_nStates = nStates;
     
-    this->_paused = 0;
+    // The systems starts paused
+    this->_paused = 1;
 };
 
 void Controller::ActivateNextState()
 {
+	// Activate the state that is next in line from the current state
 	this->_currentState = this->_currentState->GetNext();
 	this->_bridge->ActivateState(this->_currentState);
 };
 
 void Controller::ActivatePreviousState()
 {
+	// Activate the state that is the previous in the ring from the current state
 	this->_currentState = this->_currentState->GetPrevious();
 	this->_bridge->ActivateState(this->_currentState);
 };
@@ -187,34 +201,71 @@ void Controller::CalculateOffset()
 
 void Controller::CalculateTransition()
 {
-	// Calculation of the new transition point.
-	this->_transitionPosition = this->_transitionPosition + ((float) this->_pulsesPerRev/(this->_eRevPerMRev*this->_nStates));
-	if this->_transitionPosition >= this->pulsesPerRev
-		this->_transitionPosition = this->_transitionPosition - this->pulsesPerRev;
+	// Calculation of the new transition point, given by the pulses per revolution, number of states and the difference in electrical and mechanical speeds.
+	// First, save the old number to make transitioning past 0 possible.
+	this->_transitionPosition[0] = this->_transitionPosition[1];
+	
+	// Then calculate and make a transition past 0
+	this->_transitionPosition[1] = this->_transitionPosition[1] + ((float) this->_pulsesPerRev/(this->_eRevPerMRev*this->_nStates));
+	if this->_transitionPosition[1] >= this->pulsesPerRev
+		this->_transitionPosition[1] = this->_transitionPosition[1] - this->pulsesPerRev;
 	return;
 };
 
 void Controller::Logic()
 {
 	// The controller logic. Needs to be implemented/thought out.
-	if this->_transitionposition <= this->_encoder->read()
+	//int offset = this->CalculateOffset();
+	
+	// First, define the virtual position, which is encoder position + offset, modulo number of pulses.
+	int virtualposition = this->_encoder->read(); // Plus offset?
+	int step;
+	
+	// The decision tree for the transition. Setp = 1 -> transition.
+	if this->_transitionPosition[0] < this->_transitionPosition[1]
 	{
-		if this->_paused == 1
+		if virtualposition >= this->_transitionPosition[1]
 		{
-			this->currentState = this->_currentState->getNextState();
+			step = 1;
 		}
 		else
 		{
-			this->ActivateNextState();
+			step = 0;
 		}
-		
+	}
+	else
+	{
+		if virtualposition >= this->_transitionPosition[1] && virtualposition < this->_transitionPosition[0]
+		{
+			step = 1;
+		}
+		else
+		{
+			step = 0;
+		}
+	}
+	
+	// The actual transition
+	if(step == 1)
+	{
+		switch (this->_paused)
+		{
+			case 1:
+				this->currentState = this->_currentState->getNextState();
+				break;
+			case 0:
+				this->ActivateNextState();
+				break;
+		}
 		this->CalculateTransition();
 	}
+	
 	return;
 };
 
 void Controller::Pause()
 {
+	// The pause function, which behaves more like a start/stop.
 	if this->_paused == 0
 	{
 		this->_bridge->TurnOff();

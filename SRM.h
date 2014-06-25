@@ -102,7 +102,7 @@ class Controller
    private:
      void ActivateNextState();
      void ActivatePreviousState();
-     float _transitionPosition;
+     float _transitionPosition[2];
      int _pulsesPerRev;
      int _eRevPerMRev;
      int _nStates;
