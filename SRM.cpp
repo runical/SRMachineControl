@@ -30,7 +30,7 @@
 // 				PhysicalSwitch			//
 //////////////////////////////////////////
 
-PhysicalSwitch::PhysicalSwitch(int pin)
+PhysicalSwitch::PhysicalSwitch(int switchnumber, int pin)
 {
 	// PhysicalSwitch sets the pin mode to output, inits it to low and saves the pin number.
 	
@@ -38,6 +38,7 @@ PhysicalSwitch::PhysicalSwitch(int pin)
 	digitalWrite(pin, LOW);
 	this->_state = false;
 	this->_pin = pin;
+	this->_switchNumber = switchnumber;
 };
 
 void PhysicalSwitch::Activate()
@@ -59,6 +60,11 @@ void PhysicalSwitch::Deactivate()
 		this->_state = false;
 	};
 };
+
+int PhysicalSwitch::getSwitchNumber()
+{
+	return this->_switchNumber;
+}
 
 //////////////////////////////////////////
 // 				SwitchState				//
@@ -162,7 +168,7 @@ void Bridge::ActivateState(SwitchState* activatedState)
 
 // The controller implements the logic
 
-Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int nStates, int eRevPerMRev, int pulsesPerRev)
+Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int nStates, int eRevPerMRev, int pulsesPerRev, int offset)
 {
 	// Init with all of the variables
 	this->_startState = topState;
@@ -175,8 +181,13 @@ Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEnc
     this->_eRevPerMRev = eRevPerMRev;
     this->_nStates = nStates;
     
+    this->_offset = offset;
+    
     // The systems starts unpaused (but will usually change to paused because of the interrupt)
     this->_paused = 0;
+    
+    // Init the transition, otherwise the system will not start
+    this->CalculateTransitions();
 };
 
 void Controller::ActivateNextState()
@@ -193,11 +204,12 @@ void Controller::ActivatePreviousState()
 	this->_bridge->ActivateState(this->_currentState);
 };
 
-void Controller::CalculateOffset()
+/*float Controller::CalculateOffset()
 {
 	// Calculation of the offset (What the hell is this supposed to be?)
-	return;
-};
+	float offset = ((float) this->_pulsesPerRev / (float) analogRead(1));
+	return offset;
+};*/
 
 void Controller::CalculateTransitions()
 {
@@ -210,6 +222,8 @@ void Controller::CalculateTransitions()
 	if (this->_transitionPosition[1] >= this->_pulsesPerRev)
 		this->_transitionPosition[1] = this->_transitionPosition[1] - this->_pulsesPerRev;
 	return;
+	Serial.println("New transition:");
+	Serial.println(this->_transitionPosition[1]);
 };
 
 void Controller::Logic()
@@ -218,10 +232,10 @@ void Controller::Logic()
 	//int offset = this->CalculateOffset();
 	
 	// First, define the virtual position, which is encoder position + offset, modulo number of pulses.
-	int virtualposition = this->_encoder->read(); // Plus offset?
+	int virtualposition = (this->_encoder->read() + this->_offset) % this->_pulsesPerRev;
 	int step;
 	
-	// The decision tree for the transition. Setp = 1 -> transition.
+	// The decision tree for the transition. Set = 1 -> transition.
 	if (this->_transitionPosition[0] < this->_transitionPosition[1])
 	{
 		if (virtualposition >= this->_transitionPosition[1])
@@ -252,9 +266,11 @@ void Controller::Logic()
 		{
 			case 1:
 				this->_currentState = this->_currentState->GetNext();
+				// Serial.println("State changed while paused.");
 				break;
 			case 0:
 				this->ActivateNextState();
+				// Serial.println("State changed while running.");
 				break;
 		}
 		this->CalculateTransitions();
@@ -270,10 +286,24 @@ void Controller::Pause()
 	{
 		this->_bridge->TurnOff();
 		this->_paused = 1;
+		digitalWrite(0, HIGH);
+		// Serial.println("Paused");
 	}
 	else
 	{
 		this->_bridge->ActivateState(this->_currentState);
 		this->_paused = 0;
+		digitalWrite(0, LOW);
+		// Serial.println("Unpaused");
 	}
+}
+
+int Controller::GetOffset()
+{
+	return this->_offset;
+}
+
+SwitchState* Controller::GetCurrentState()
+{
+	return this->_currentState;
 }
