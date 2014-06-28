@@ -23,7 +23,6 @@
 */
 
 //#include "arduino.h"
-#include <stdio.h>
 #include "SRM.h"
 
 //////////////////////////////////////////
@@ -34,8 +33,8 @@ PhysicalSwitch::PhysicalSwitch(int switchnumber, int pin)
 {
 	// PhysicalSwitch sets the pin mode to output, inits it to low and saves the pin number.
 	
-	//pinMode(pin, OUTPUT);
-	//digitalWrite(pin, LOW);
+	pinMode(pin, OUTPUT);
+	digitalWrite(pin, LOW);
 	this->_state = false;
 	this->_pin = pin;
 	this->_switchNumber = switchnumber;
@@ -46,9 +45,8 @@ void PhysicalSwitch::Activate()
 	// Activate a switch
 	if(not this->_state)
 	{
-		//digitalWrite(_pin, HIGH);
+		digitalWrite(_pin, HIGH);
 		this->_state = true;
-		printf("ON: %i ", this->_switchNumber);
 	};
 };
 
@@ -57,9 +55,8 @@ void PhysicalSwitch::Deactivate()
 	// Deactivate a switch
 	if(this->_state)
 	{
-		//digitalWrite(_pin, LOW);
+		digitalWrite(_pin, LOW);
 		this->_state = false;
-		printf("OFF: %i ", this->_switchNumber);
 	};
 };
 
@@ -230,16 +227,16 @@ void Controller::CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nSt
 		transition = (float) offset;
 	}
 	this->_startState->SetTransition( (int) transition );
-	printf("%f\n", transition);
-	printf("%i\n", (int) (transition + 0.5));
+	Serial.println(transition);
+	Serial.println((int) (transition + 0.5));
 	
 	while( true )
 	{
 		transition = (transition + increase);
 		newTransition = ((int) (transition + 0.5)) % pulsesPerRev;
 		theState->SetTransition(newTransition);
-		printf("%f\n", transition);
-		printf("%i\n", newTransition);
+		Serial.println(transition);
+		Serial.println(newTransition);
 		
 		theState = theState->GetNext();
 		if( theState == this->_startState )
@@ -259,19 +256,14 @@ void Controller::Logic()
 	// In the case that the transition goes through 0, we check if the encoder did indeed reset. If it did, we can compare and eventually change state.
 	if( NextState->GetTransition() < _currentState->GetTransition() )
 	{
-		if( (NextState->GetTransition() <= (this->_encoder->read()) && this->_encoder->read() < 10000) )
+		if( (NextState->GetTransition() <= (this->_encoder->read()) && this->_encoder->read() < 10000) ) /* LELIJK! Moet een beter oplossing voor zijn.*/
 		{
-			printf("pos: %i ", this->_encoder->read());
 			this->ActivateNextState();
-			printf("\n There should be a transition");
-			printf("\n");
 		}
 	}
 	else if( (NextState->GetTransition() <= (this->_encoder->read()) ) ) // otherwise, we can just use position >= transition
 	{
-		printf("pos: %i ", this->_encoder->read());
 		this->ActivateNextState();
-		printf("\n");
 	}
 	return;
 };
