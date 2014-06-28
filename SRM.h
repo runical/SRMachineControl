@@ -64,9 +64,12 @@ class SwitchState
      void SetPrevious(SwitchState* insertedState);
      int GetNumberOfSwitches();
      PhysicalSwitch** GetSwitches();
+     int GetTransition();
+     void SetTransition(int transition);
    private:
      PhysicalSwitch** _activeSwitches;
      int _nSwitches;
+     int _transition;
      SwitchState* _next;
      SwitchState* _previous;
 };
@@ -96,22 +99,13 @@ class Controller
     */
 
    public:
-     Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int nStates, int eRevPerMRev, int pulsesPerRev, int offset);
+     Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder);
      void Logic();
-     // float CalculateOffset();
-     void CalculateTransitions();
-     void Pause();
-     int GetOffset();
+     void CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nStates, int offset);
      SwitchState* GetCurrentState();
    private:
      void ActivateNextState();
      void ActivatePreviousState();
-     float _transitionPosition[2];
-     int _pulsesPerRev;
-     int _eRevPerMRev;
-     int _nStates;
-     int _paused;
-     int _offset;
      Encoder* _encoder;
      Bridge* _bridge;
      SwitchState* _startState;

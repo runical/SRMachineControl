@@ -124,6 +124,16 @@ PhysicalSwitch** SwitchState::GetSwitches()
 	return _activeSwitches;
 };
 
+void SwitchState::SetTransition(int transition)
+{
+	this->_transition = transition;
+}
+
+int SwitchState::GetTransition()
+{
+	return this->_transition;
+}
+
 //////////////////////////////////////////
 //				Bridge					//
 //////////////////////////////////////////
@@ -168,26 +178,13 @@ void Bridge::ActivateState(SwitchState* activatedState)
 
 // The controller implements the logic
 
-Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int nStates, int eRevPerMRev, int pulsesPerRev, int offset)
+Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder)
 {
 	// Init with all of the variables
 	this->_startState = topState;
 	this->_currentState = topState;
 	this->_bridge = theBridge;
 	this->_encoder = theEncoder;
-	
-	this->_transitionPosition = {0, 0};
-	this->_pulsesPerRev = pulsesPerRev;
-    this->_eRevPerMRev = eRevPerMRev;
-    this->_nStates = nStates;
-    
-    this->_offset = offset;
-    
-    // The systems starts unpaused (but will usually change to paused because of the interrupt)
-    this->_paused = 0;
-    
-    // Init the transition, otherwise the system will not start
-    this->CalculateTransitions();
 };
 
 void Controller::ActivateNextState()
@@ -211,99 +208,75 @@ void Controller::ActivatePreviousState()
 	return offset;
 };*/
 
-void Controller::CalculateTransitions()
+void Controller::CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nStates, int offset)
 {
 	// Calculation of the new transition point, given by the pulses per revolution, number of states and the difference in electrical and mechanical speeds.
-	// First, save the old number to make transitioning past 0 possible.
-	this->_transitionPosition[0] = this->_transitionPosition[1];
+	this->_startState->SetTransition((offset + pulsesPerRev) % pulsesPerRev);
 	
-	// Then calculate and make a transition past 0
-	this->_transitionPosition[1] = this->_transitionPosition[1] + ((float) this->_pulsesPerRev/(this->_eRevPerMRev*this->_nStates));
-	if (this->_transitionPosition[1] >= this->_pulsesPerRev)
-		this->_transitionPosition[1] = this->_transitionPosition[1] - this->_pulsesPerRev;
-	return;
-	Serial.println("New transition:");
-	Serial.println(this->_transitionPosition[1]);
+	SwitchState* theState = this->_startState->GetNext();
+	bool stop = false;
+	float increase = (float) pulsesPerRev/( (float) (nStates * eRevPerMRev));
+	float transition;
+	int newTransition;
+	int counter = 0;
+	if (offset < 0)
+	{
+		transition = (float) (pulsesPerRev + offset);
+	}
+	else
+	{
+		transition = (float) offset;
+	}
+	this->_startState->SetTransition( (int) transition );
+	Serial.println(transition);
+	Serial.println((int) (transition + 0.5));
+	
+	while( true )
+	{
+		transition = (transition + increase);
+		newTransition = ((int) (transition + 0.5)) % pulsesPerRev;
+		theState->SetTransition(newTransition);
+		Serial.println(transition);
+		Serial.println(newTransition);
+		
+		theState = theState->GetNext();
+		if( theState == this->_startState )
+		{
+			return;
+		}
+	}		
+	
 };
 
 void Controller::Logic()
 {
-	// The controller logic. Needs to be implemented/thought out.
-	//int offset = this->CalculateOffset();
+	// The controller logic.
+	// First get the next state for the relevant information.	
+	SwitchState* NextState = this->_currentState->GetNext();		
 	
-	// First, define the virtual position, which is encoder position + offset, modulo number of pulses.
-	int virtualposition = (this->_encoder->read() + this->_offset) % this->_pulsesPerRev;
-	int step;
-	
-	// The decision tree for the transition. Set = 1 -> transition.
-	if (this->_transitionPosition[0] < this->_transitionPosition[1])
+	// In the case that the transition goes through 0, we check if the encoder did indeed reset. If it did, we can compare and eventually change state.
+	if( NextState->GetTransition() < _currentState->GetTransition() )
 	{
-		if (virtualposition >= this->_transitionPosition[1])
+		if( (this->_currentState->GetTransition() < (this->_encoder->read()) && this->_encoder->read() >= 0) )
 		{
-			step = 1;
-		}
-		else
-		{
-			step = 0;
+			this->ActivateNextState();
 		}
 	}
-	else
+	else if( (this->_currentState->GetTransition() <= (this->_encoder->read()) ) ) // otherwise, we can just use position >= transition
 	{
-		if (virtualposition >= this->_transitionPosition[1] && virtualposition < this->_transitionPosition[0])
-		{
-			step = 1;
-		}
-		else
-		{
-			step = 0;
-		}
-	}
-	
-	// The actual transition
-	if(step == 1)
-	{
-		switch (this->_paused)
-		{
-			case 1:
-				this->_currentState = this->_currentState->GetNext();
-				// Serial.println("State changed while paused.");
-				break;
-			case 0:
-				this->ActivateNextState();
-				// Serial.println("State changed while running.");
-				break;
-		}
-		this->CalculateTransitions();
+		this->ActivateNextState();
 	}
 	
 	return;
 };
-
-void Controller::Pause()
-{
-	// The pause function, which behaves more like a start/stop.
-	if (this->_paused == 0)
-	{
-		this->_bridge->TurnOff();
-		this->_paused = 1;
-		digitalWrite(0, HIGH);
-		// Serial.println("Paused");
-	}
-	else
-	{
-		this->_bridge->ActivateState(this->_currentState);
-		this->_paused = 0;
-		digitalWrite(0, LOW);
-		// Serial.println("Unpaused");
-	}
-}
-
-int Controller::GetOffset()
-{
-	return this->_offset;
-}
 
 SwitchState* Controller::GetCurrentState()
 {
 	return this->_currentState;
 }
+
+/*float* Controller::GetTransition()
+{
+	return this->_transitionPosition;
+}
+*/
