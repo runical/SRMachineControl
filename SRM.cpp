@@ -66,7 +66,7 @@ void PhysicalSwitch::Deactivate()
 	};
 };
 
-int PhysicalSwitch::getSwitchNumber()
+int PhysicalSwitch::GetSwitchNumber()
 {
 	return this->_switchNumber;
 }
@@ -183,13 +183,20 @@ void Bridge::ActivateState(SwitchState* activatedState)
 
 // The controller implements the logic
 
-Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder)
+Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset)
 {
-	// Init with all of the variables
+	// Init the needed objects
 	this->_startState = topState;
 	this->_currentState = topState;
 	this->_bridge = theBridge;
 	this->_encoder = theEncoder;
+	
+	// Startup messages
+	Serial.begin(9600);
+	Serial.println("Starting up.");
+  
+	// Set up the transitions
+	this->CalculateTransitions(pulsesPerRev, eRevPerMRev, nStates, offset);
 };
 
 void Controller::ActivateNextState()
@@ -279,46 +286,34 @@ SwitchState* Controller::GetCurrentState()
 	return this->_currentState;
 }
 
-void Controller::Setup(int pulsesPerRev, int eRevPerMRev, int nStates, int offset)
+void Controller::Setup()
 {
-	// Startup messages
-	Serial.begin(9600);
-	Serial.println("Starting up.");
-  
-	// Interrupt for the index pulse
-	attachInterrupt(26, resetEncoder, RISING);
-  
-	// Set up the transitions
-	this->CalculateTransitions(pulsesPerRev, eRevPerMRev, n_States, offset);
-	
 	// Setting the Encoder
-	bool ControlStart = false;
-	int oldPosition = 0;
+	static bool FirstTime = true;
+	static int oldPosition = 0;
 	
-	Serial.println("Turn the encoder to find the index pulse");
-	
-	while( ControlStart == false )
+	if(FirstTime)
 	{
-		int newPosition = _encoder->read();
-		if (newPosition != oldPosition) 
-		{
-			oldPosition = newPosition;
-			Serial.print(newPosition);
-			Serial.println(" ");
-			if (Start > 2)
-			{
-				ControlStart = true;
-			}
-		}
+		Serial.println("Turn the encoder to find the index pulse");
+		FirstTime = false;
 	}
-	Serial.println("Controller set up, end of messages. Please back away from the motor and turn on the power.");
-	Serial.end();
 	
-	// Delay in seconds before starting.
-	int delay = 10;
+	int newPosition = _encoder->read();
+	if (newPosition != oldPosition) 
+	{
+		oldPosition = newPosition;
+		Serial.print(newPosition);
+		Serial.println(" ");
+	}
+}
+
+void Controller::Startup(int secondsDelay)
+{
+	Serial.println("Controller set up. The motor will start turning when the power is turned on and the delay is over.");
+	
 	int c;
 	
-	for(c = 0 ; c < delay ; c++)
+	for(c = 0 ; c < secondsDelay ; c++)
 	{
 		delay(1000);
 	}

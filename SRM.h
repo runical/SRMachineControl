@@ -39,7 +39,7 @@ class PhysicalSwitch
      PhysicalSwitch(int number, int pin);
      void Activate();
      void Deactivate();
-     int getSwitchNumber();
+     int GetSwitchNumber();
    private:
      int _pin;
      int _switchNumber;
@@ -99,8 +99,9 @@ class Controller
     */
 
    public:
-     Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder);
-     void Setup(int pulsesPerRev, int eRevPerMRev, int nStates, int offset);
+     Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset);
+     void Setup();
+     void Startup(int secondsDelay);
      void Logic();
      void CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nStates, int offset);
      SwitchState* GetCurrentState();
