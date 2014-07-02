@@ -47,6 +47,9 @@ void PhysicalSwitch::Activate()
 	{
 		digitalWrite(_pin, HIGH);
 		this->_state = true;
+		//Serial.print("ON: ");
+		//Serial.print(this->_switchNumber);
+		//Serial.println(" ");
 	};
 };
 
@@ -57,6 +60,9 @@ void PhysicalSwitch::Deactivate()
 	{
 		digitalWrite(_pin, LOW);
 		this->_state = false;
+		//Serial.print("ON: ");
+		//Serial.print(this->_switchNumber);
+		//Serial.println(" ");
 	};
 };
 
@@ -256,14 +262,21 @@ void Controller::Logic()
 	// In the case that the transition goes through 0, we check if the encoder did indeed reset. If it did, we can compare and eventually change state.
 	if( NextState->GetTransition() < _currentState->GetTransition() )
 	{
-		if( (NextState->GetTransition() <= (this->_encoder->read()) && this->_encoder->read() < 10000) ) /* LELIJK! Moet een beter oplossing voor zijn.*/
+		if( (NextState->GetTransition() <= (this->_encoder->read()) && this->_encoder->read() < this->_currentState->GetTransition()) )
 		{
+			//Serial.print("State Change at ");
+			//Serial.print(this->_encoder->read());
+			//Serial.println(" with 0 transition");
 			this->ActivateNextState();
+			//Serial.println("");
 		}
 	}
 	else if( (NextState->GetTransition() <= (this->_encoder->read()) ) ) // otherwise, we can just use position >= transition
 	{
+		//Serial.print("State Change at ");
+		//Serial.println(this->_encoder->read());
 		this->ActivateNextState();
+		//Serial.println("");
 	}
 	return;
 };
