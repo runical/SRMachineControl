@@ -100,6 +100,7 @@ class Controller
 
    public:
      Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder);
+     void Setup(int pulsesPerRev, int eRevPerMRev, int nStates, int offset);
      void Logic();
      void CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nStates, int offset);
      SwitchState* GetCurrentState();

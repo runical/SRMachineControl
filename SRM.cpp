@@ -206,13 +206,6 @@ void Controller::ActivatePreviousState()
 	this->_bridge->ActivateState(this->_currentState);
 };
 
-/*float Controller::CalculateOffset()
-{
-	// Calculation of the offset (What the hell is this supposed to be?)
-	float offset = ((float) this->_pulsesPerRev / (float) analogRead(1));
-	return offset;
-};*/
-
 void Controller::CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nStates, int offset)
 {
 	// Calculation of the new transition point, given by the pulses per revolution, number of states and the difference in electrical and mechanical speeds.
@@ -286,8 +279,51 @@ SwitchState* Controller::GetCurrentState()
 	return this->_currentState;
 }
 
-/*float* Controller::GetTransition()
+void Controller::Setup(int pulsesPerRev, int eRevPerMRev, int nStates, int offset)
 {
-	return this->_transitionPosition;
+	// Startup messages
+	Serial.begin(9600);
+	Serial.println("Starting up.");
+  
+	// Interrupt for the index pulse
+	attachInterrupt(26, resetEncoder, RISING);
+  
+	// Set up the transitions
+	this->CalculateTransitions(pulsesPerRev, eRevPerMRev, n_States, offset);
+	
+	// Setting the Encoder
+	bool ControlStart = false;
+	int oldPosition = 0;
+	
+	Serial.println("Turn the encoder to find the index pulse");
+	
+	while( ControlStart == false )
+	{
+		int newPosition = _encoder->read();
+		if (newPosition != oldPosition) 
+		{
+			oldPosition = newPosition;
+			Serial.print(newPosition);
+			Serial.println(" ");
+			if (Start > 2)
+			{
+				ControlStart = true;
+			}
+		}
+	}
+	Serial.println("Controller set up, end of messages. Please back away from the motor and turn on the power.");
+	Serial.end();
+	
+	// Delay in seconds before starting.
+	int delay = 10;
+	int c;
+	
+	for(c = 0 ; c < delay ; c++)
+	{
+		delay(1000);
+	}
+	
+	// Do the startup sequence.
+	this->Logic();
+	this->ActivateNextState();
 }
-*/
