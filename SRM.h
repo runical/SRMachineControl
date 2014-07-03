@@ -103,11 +103,12 @@ class Controller
      void Setup();
      void Startup(int secondsDelay);
      void Logic();
-     void CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nStates, int offset);
-     SwitchState* GetCurrentState();
+     void CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int calibrationOffset);
+     int Calibrate();
    private:
      void ActivateNextState();
      void ActivatePreviousState();
+     void ActivateCurrentState();
      Encoder* _encoder;
      Bridge* _bridge;
      SwitchState* _startState;
