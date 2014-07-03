@@ -103,7 +103,7 @@ class Controller
      void Setup();
      void Startup(int secondsDelay);
      void Logic();
-     void CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int calibrationOffset);
+     void CalculateTransitions(int calibrationOffset);
      int Calibrate();
    private:
      void ActivateNextState();
@@ -113,4 +113,8 @@ class Controller
      Bridge* _bridge;
      SwitchState* _startState;
      SwitchState* _currentState;
+     int _pulsesPerRev;
+	 int _eRevPerMRev;
+	 int _nStates;
+	 int _offset;
 };

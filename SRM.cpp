@@ -191,6 +191,12 @@ Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEnc
 	this->_bridge = theBridge;
 	this->_encoder = theEncoder;
 	
+	// Init variables
+	this->_pulsesPerRev = pulsesPerRev;
+	this->_eRevPerMRev = eRevPerMRev;
+	this->_nStates = nStates;
+	this->_offset = offset;
+	
 	// Startup messages
 	Serial.begin(9600);
 	Serial.println("Starting up.");
@@ -210,16 +216,16 @@ void Controller::ActivatePreviousState()
 	this->_bridge->ActivateState(this->_currentState);
 }
 
-void Controller:ActivateCurrentState()
+void Controller::ActivateCurrentState()
 {
 	this->_bridge->ActivateState(this->_currentState);
 }
 
-void Controller::CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int calibrationOffset)
+void Controller::CalculateTransitions(int calibrationOffset)
 {
 	// Calculation of the new transition point, given by the pulses per revolution, number of states and the difference in electrical and mechanical speeds.
-	float transition = (float) ((calibrationOffset + offset + pulsesPerRev) % pulsesPerRev);
-	float increment = ((float) pulsesPerRev) / ( ( float ) (nStates * eRevPerMRev) );
+	float transition = (float) ((calibrationOffset + this->_offset + this->_pulsesPerRev) % this->_pulsesPerRev);
+	float increment = ((float) this->_pulsesPerRev) / ( ( float ) (this->_nStates * this->_eRevPerMRev) );
 	
 	SwitchState* theState = this->_startState;
 	
@@ -227,7 +233,7 @@ void Controller::CalculateTransitions(int pulsesPerRev, int eRevPerMRev, int nSt
 	{
 		// First add 0.5 before typecasting to make the rounding correct.
 		// mod pulsesPerRev to keep within the boundaries of the transitions.
-		int newTransition = ( ( int ) (transition + 0.5) ) % pulsesPerRev;
+		int newTransition = ( ( int ) (transition + 0.5) ) % this->_pulsesPerRev;
 		
 		theState->SetTransition(newTransition);
 		
@@ -296,10 +302,10 @@ void Controller::Startup(int secondsDelay)
 	}
 	
 	// Calibrate
-	int CalibrationOffset = this->Calibrate();
+	int calibrationOffset = this->Calibrate();
 	
 	// Set up the transitions
-	this->CalculateTransitions(pulsesPerRev, eRevPerMRev, nStates, offset, CalibrationOffset);
+	this->CalculateTransitions(calibrationOffset);
 	
 	// Let something know
 	Serial.print("Motor calibrated. Please stand back. The motor will start in ");
