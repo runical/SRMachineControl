@@ -34,10 +34,10 @@ PhysicalSwitch::PhysicalSwitch(int switchnumber, int pin)
 	// PhysicalSwitch sets the pin mode to output, inits it to low and saves the pin number.
 	
 	pinMode(pin, OUTPUT);
-	digitalWrite(pin, LOW);
-	this->_state = false;
+	this->_state = true;
 	this->_pin = pin;
 	this->_switchNumber = switchnumber;
+	this->Deactivate();
 }
 
 void PhysicalSwitch::Activate()
@@ -181,7 +181,7 @@ void Bridge::ActivateState(SwitchState* activatedState)
 // 				Controller				//
 //////////////////////////////////////////
 
-// The controller implements the logic
+// The controller implements the logic (and most other meta functionality)
 
 Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset)
 {
@@ -196,10 +196,6 @@ Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEnc
 	this->_eRevPerMRev = eRevPerMRev;
 	this->_nStates = nStates;
 	this->_offset = offset;
-	
-	// Startup messages
-	Serial.begin(9600);
-	Serial.println("Starting up.");
 }
 
 void Controller::ActivateNextState()
@@ -231,16 +227,21 @@ void Controller::CalculateTransitions(int calibrationOffset)
 	
 	do
 	{
+		// First get the next state so that the positions are exactly 1 transition out of sync.
+		theState = theState->GetNext();
+		
 		// First add 0.5 before typecasting to make the rounding correct.
 		// mod pulsesPerRev to keep within the boundaries of the transitions.
 		int newTransition = ( ( int ) (transition + 0.5) ) % this->_pulsesPerRev;
+		
+		Serial.print(transition);
+		Serial.print(" -> ");
+		Serial.println(newTransition);
 		
 		theState->SetTransition(newTransition);
 		
 		// Then calculate the next transition and select the next state.
 		transition = transition + increment;
-		
-		theState = theState->GetNext();
 	} while( theState != this->_startState);
 	
 }
@@ -282,7 +283,7 @@ void Controller::Setup()
 	if (newPosition != oldPosition) 
 	{
 		oldPosition = newPosition;
-		Serial.println(newPosition);
+		Serial.println(oldPosition);
 	}
 }
 
@@ -302,6 +303,7 @@ void Controller::Startup(int secondsDelay)
 	}
 	
 	// Calibrate
+	Serial.println("Starting calibration. Please make sure that the power is on.");
 	int calibrationOffset = this->Calibrate();
 	
 	// Set up the transitions
@@ -310,18 +312,27 @@ void Controller::Startup(int secondsDelay)
 	// Let something know
 	Serial.print("Motor calibrated. Please stand back. The motor will start in ");
 	Serial.print(secondsDelay);
-	Serial.println(" seconds. There will be no more messages.");
+	Serial.println(" seconds.");
+	
+	for(c = 0 ; c < secondsDelay ; c++)
+	{
+		Serial.println(secondsDelay - c);
+		delay(1000);
+	}
+	
+	Serial.print("Encoder: ");
+	Serial.println(this->_encoder->read());
+	Serial.println("End of messages.");
 	Serial.end();
 }
 
 int Controller::Calibrate()
 {
-	Serial.println("Starting calibration. Please make sure that the power is on.");
-	
 	int Position = this->_encoder->read();
 	bool Calibration = true;
 	
 	this->ActivateCurrentState();
+	delay(5000);
 	
 	while(Calibration)
 	{
@@ -334,6 +345,22 @@ int Controller::Calibrate()
 	}
 	
 	Serial.println(Position);
+	if(this->_encoder->read() < 0)
+	{
+		Position = this->_encoder->read() + this->_pulsesPerRev;
+		this->_encoder->write(Position);
+	}
 	
 	return Position;
+}
+
+void Controller::Step(int secondsDelay)
+{
+	int c;
+	for(c = 0 ; c < secondsDelay ; c++)
+	{
+		delay(1000);
+	}
+	
+	this->ActivateNextState();
 }
