@@ -105,7 +105,7 @@ class Controller
      void Logic();
      void CalculateTransitions(int calibrationOffset);
      void Step(int secondsDelay);
-     int Calibrate();
+     void Calibrate();
    private:
      void ActivateNextState();
      void ActivatePreviousState();

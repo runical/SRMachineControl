@@ -250,20 +250,47 @@ void Controller::Logic()
 {
 	// The controller logic.
 	// First get the next state for the relevant information.	
-	SwitchState* NextState = this->_currentState->GetNext();		
+	SwitchState* NextState = this->_currentState->GetNext();
+	SwitchState* NextNextState = NextState->GetNext();
 	
-	// In the case that the transition goes through 0, we check if the encoder did indeed reset. If it did, we can compare and eventually change state.
-	if( NextState->GetTransition() < _currentState->GetTransition() )
+	/* 
+	 * In the case that the transition goes through 0, we have 2 problems:
+	 * 1. Compare a number that will be smaller wo an higher number, providing to much advancement (until encoder reset)
+	 * 2. Compare a huge number to a potentially small number, inhibiting the advancement, thus stalling the motor.
+	 * 
+	 * So, first we start with comparing the transitions of the current and next state.
+	 * This gives us if there will be a zero crossing (if current > next)
+	 * We can then solve that by making sure that the encoder is not only bigger than the transition number of the next state 
+	 * AND smaller than the transition number of the current state. If this is correct, we advance to the next state.
+	 * 
+	 * Secondly, we need to catch small intervals. We do this by essentially the same thing. We compare the next two states'
+	 * transition number. If the next one is bigger than the one after it, ther is a zero crossing and thus we need extra rules.
+	 * The rules are that the encoder position must be bigger than the transition number of the next state OR smaller than the 
+	 * transition number of the current state.
+	 * 
+	 * If neither of these is the case, we can just compare the normal way (next state's transition number is smaller than the position)
+	*/
+	    
+	   
+	if( NextState->GetTransition() < _currentState->GetTransition()) // First case
 	{
 		if( (NextState->GetTransition() <= (this->_encoder->read()) && this->_encoder->read() < this->_currentState->GetTransition()) )
 		{
 			this->ActivateNextState();
 		}
 	}
-	else if( (NextState->GetTransition() <= (this->_encoder->read()) ) ) // otherwise, we can just use position >= transition
+	else if( NextNextState->GetTransition() < NextState->GetTransition() ) // Second case
+	{
+		if( ( this->_encoder->read() >= NextState->GetTransition() ) || ( this->_encoder->read() <= this->_currentState->GetTransition() ) )
+		{
+			this->ActivateNextState();
+		}
+	}
+	else if( ( this->_encoder->read() >= NextState->GetTransition() ) ) // The rest
 	{
 		this->ActivateNextState();
 	}
+	
 	return;
 }
 
@@ -304,10 +331,11 @@ void Controller::Startup(int secondsDelay)
 	
 	// Calibrate
 	Serial.println("Starting calibration. Please make sure that the power is on.");
-	int calibrationOffset = this->Calibrate();
+	//int calibrationOffset = this->Calibrate();
+	this->Calibrate();
 	
 	// Set up the transitions
-	this->CalculateTransitions(calibrationOffset);
+	//this->CalculateTransitions(calibrationOffset);
 	
 	// Let something know
 	Serial.print("Motor calibrated. Please stand back. The motor will start in ");
@@ -326,41 +354,31 @@ void Controller::Startup(int secondsDelay)
 	Serial.end();
 }
 
-int Controller::Calibrate()
+void Controller::Calibrate()
 {
-	int Position = this->_encoder->read();
-	bool Calibration = true;
-	
 	this->ActivateCurrentState();
-	delay(5000);
 	
-	while(Calibration)
+	int transition;
+	
+	do
 	{
-		int newPosition = this->_encoder->read();
-		if(newPosition == Position)
-		{
-			Calibration = false;
-		}
-		Position = newPosition;
-	}
-	
-	Serial.println(Position);
-	if(this->_encoder->read() < 0)
-	{
-		Position = this->_encoder->read() + this->_pulsesPerRev;
-		this->_encoder->write(Position);
-	}
-	
-	return Position;
+		delay(5000);
+		transition = (this->_encoder->read() + this->_offset + this->_pulsesPerRev) % this->_pulsesPerRev;
+		
+		this->ActivateNextState();
+		this->_currentState->SetTransition(transition);
+		Serial.println(transition);
+	} while(this->_currentState != this->_startState);
 }
 
 void Controller::Step(int secondsDelay)
 {
 	int c;
+	
+	this->ActivateNextState();
+	
 	for(c = 0 ; c < secondsDelay ; c++)
 	{
 		delay(1000);
 	}
-	
-	this->ActivateNextState();
 }
