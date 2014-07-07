@@ -26,7 +26,7 @@
 //#ifndef SRM_h_
 //#define SRM_h_
 
-#include "Encoder.h"
+#include "TestEncoder.h"
 
 class PhysicalSwitch
 {
@@ -105,7 +105,7 @@ class Controller
      void Logic();
      void CalculateTransitions(int calibrationOffset);
      void Step(int secondsDelay);
-     void Calibrate();
+     int Calibrate();
    private:
      void ActivateNextState();
      void ActivatePreviousState();

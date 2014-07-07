@@ -23,6 +23,7 @@
 */
 
 //#include "arduino.h"
+#include <stdio.h>
 #include "SRM.h"
 
 //////////////////////////////////////////
@@ -33,7 +34,7 @@ PhysicalSwitch::PhysicalSwitch(int switchnumber, int pin)
 {
 	// PhysicalSwitch sets the pin mode to output, inits it to low and saves the pin number.
 	
-	pinMode(pin, OUTPUT);
+	//pinMode(pin, OUTPUT);
 	this->_state = true;
 	this->_pin = pin;
 	this->_switchNumber = switchnumber;
@@ -45,11 +46,9 @@ void PhysicalSwitch::Activate()
 	// Activate a switch
 	if(not this->_state)
 	{
-		digitalWrite(_pin, HIGH);
+		//digitalWrite(_pin, HIGH);
 		this->_state = true;
-		//Serial.print("ON: ");
-		//Serial.print(this->_switchNumber);
-		//Serial.println(" ");
+		printf("Switch %i turned on\n", this->_switchNumber);
 	}
 }
 
@@ -58,11 +57,9 @@ void PhysicalSwitch::Deactivate()
 	// Deactivate a switch
 	if(this->_state)
 	{
-		digitalWrite(_pin, LOW);
+		//digitalWrite(_pin, LOW);
 		this->_state = false;
-		//Serial.print("ON: ");
-		//Serial.print(this->_switchNumber);
-		//Serial.println(" ");
+		printf("Switch %i turned off\n", this->_switchNumber);
 	}
 }
 
@@ -219,6 +216,8 @@ void Controller::ActivateCurrentState()
 
 void Controller::CalculateTransitions(int calibrationOffset)
 {
+	printf("Starting calculation for transitions!\n\n");
+	
 	// Calculation of the new transition point, given by the pulses per revolution, number of states and the difference in electrical and mechanical speeds.
 	float transition = (float) ((calibrationOffset + this->_offset + this->_pulsesPerRev) % this->_pulsesPerRev);
 	float increment = ((float) this->_pulsesPerRev) / ( ( float ) (this->_nStates * this->_eRevPerMRev) );
@@ -234,15 +233,15 @@ void Controller::CalculateTransitions(int calibrationOffset)
 		// mod pulsesPerRev to keep within the boundaries of the transitions.
 		int newTransition = ( ( int ) (transition + 0.5) ) % this->_pulsesPerRev;
 		
-		Serial.print(transition);
-		Serial.print(" -> ");
-		Serial.println(newTransition);
+		printf("%f -> %i \n", transition, newTransition);
 		
 		theState->SetTransition(newTransition);
 		
 		// Then calculate the next transition and select the next state.
 		transition = transition + increment;
 	} while( theState != this->_startState);
+	
+	printf("Finished calculation of transitions!\n");
 	
 }
 
@@ -251,8 +250,7 @@ void Controller::Logic()
 	// The controller logic.
 	// First get the next state for the relevant information.	
 	SwitchState* NextState = this->_currentState->GetNext();
-	SwitchState* NextNextState = NextState->GetNext();
-	
+		
 	/* 
 	 * In the case that the transition goes through 0, we have 2 problems:
 	 * 1. Compare a number that will be smaller wo an higher number, providing to much advancement (until encoder reset)
@@ -268,27 +266,29 @@ void Controller::Logic()
 	 * The rules are that the encoder position must be bigger than the transition number of the next state OR smaller than the 
 	 * transition number of the current state.
 	 * 
-	 * If neither of these is the case, we can just compare the normal way (next state's transition number is smaller than the position)
+	 * If neither of these is the case, we can just compare the normal way (next state's transition number is smaller than the position).
+	 * Please do note that the second case can also be used as the general case, just with a way to cope with zero.
 	*/
 	    
 	   
-	if( NextState->GetTransition() < _currentState->GetTransition()) // First case
+	if( NextState->GetTransition() < this->_currentState->GetTransition()) // First case
 	{
 		if( (NextState->GetTransition() <= (this->_encoder->read()) && this->_encoder->read() < this->_currentState->GetTransition()) )
 		{
+			printf("First Case\n");
+			printf("pos: %i \n", this->_encoder->read());
+			printf("trans: %i \n", NextState->GetTransition());
 			this->ActivateNextState();
+			printf("\n");
 		}
 	}
-	else if( NextNextState->GetTransition() < NextState->GetTransition() ) // Second case
+	else if( ( this->_encoder->read() >= NextState->GetTransition() ) || ( this->_encoder->read() <= this->_currentState->GetTransition() ) ) // General Case
 	{
-		if( ( this->_encoder->read() >= NextState->GetTransition() ) || ( this->_encoder->read() <= this->_currentState->GetTransition() ) )
-		{
-			this->ActivateNextState();
-		}
-	}
-	else if( ( this->_encoder->read() >= NextState->GetTransition() ) ) // The rest
-	{
+		printf("General Case\n");
+		printf("pos: %i \n", this->_encoder->read());
+		printf("trans: %i \n", NextState->GetTransition());
 		this->ActivateNextState();
+		printf("\n");
 	}
 	
 	return;
@@ -302,7 +302,7 @@ void Controller::Setup()
 	
 	if(FirstTime)
 	{
-		Serial.println("Turn the encoder to find the index pulse");
+		//Serial.println("Turn the encoder to find the index pulse");
 		FirstTime = false;
 	}
 	
@@ -316,7 +316,7 @@ void Controller::Setup()
 
 void Controller::Startup(int secondsDelay)
 {
-	Serial.print("Please turn on the power. After a ");
+	/*Serial.print("Please turn on the power. After a ");
 	Serial.print(secondsDelay);
 	Serial.println(" second delay the motor will be calibrated and the transitions will be calculated.");
 	Serial.println("Please stand back.");
@@ -327,34 +327,35 @@ void Controller::Startup(int secondsDelay)
 	{
 		Serial.println(secondsDelay - c);
 		delay(1000);
-	}
+	}*/
 	
 	// Calibrate
-	Serial.println("Starting calibration. Please make sure that the power is on.");
-	//int calibrationOffset = this->Calibrate();
-	this->Calibrate();
+	//Serial.println("Starting calibration. Please make sure that the power is on.");
+	int calibrationOffset = this->Calibrate();
+	//this->Calibrate();
 	
 	// Set up the transitions
-	//this->CalculateTransitions(calibrationOffset);
+	this->CalculateTransitions(calibrationOffset);
+	//this->ActivateCurrentState();
 	
 	// Let something know
-	Serial.print("Motor calibrated. Please stand back. The motor will start in ");
-	Serial.print(secondsDelay);
-	Serial.println(" seconds.");
+	//Serial.print("Motor calibrated. Please stand back. The motor will start in ");
+	//Serial.print(secondsDelay);
+	//Serial.println(" seconds.");
 	
-	for(c = 0 ; c < secondsDelay ; c++)
-	{
-		Serial.println(secondsDelay - c);
-		delay(1000);
-	}
+	//for(c = 0 ; c < secondsDelay ; c++)
+	//{
+		//Serial.println(secondsDelay - c);
+		//delay(1000);
+	//}
 	
-	Serial.print("Encoder: ");
-	Serial.println(this->_encoder->read());
-	Serial.println("End of messages.");
-	Serial.end();
+	//Serial.print("Encoder: ");
+	//Serial.println(this->_encoder->read());
+	//Serial.println("End of messages.");
+	//Serial.end();
 }
 
-void Controller::Calibrate()
+/*void Controller::Calibrate()
 {
 	this->ActivateCurrentState();
 	
@@ -369,16 +370,44 @@ void Controller::Calibrate()
 		this->_currentState->SetTransition(transition);
 		Serial.println(transition);
 	} while(this->_currentState != this->_startState);
-}
+}*/
 
 void Controller::Step(int secondsDelay)
-{
-	int c;
-	
+{	
 	this->ActivateNextState();
 	
-	for(c = 0 ; c < secondsDelay ; c++)
+	//delay(secondsDelay*1000);
+	
+	int encoderval = this->_encoder->read();
+	
+	if( encoderval < 0)
 	{
-		delay(1000);
+		encoderval = this->_pulsesPerRev + encoderval;
+		this->_encoder->write( encoderval );
 	}
+}
+
+int Controller::Calibrate()
+{
+	//Serial.println("Starting calibration. Please make sure that the power is on.");
+	
+	int Position = this->_encoder->read();
+	bool Calibration = true;
+	
+	this->ActivateCurrentState();
+	//delay(5000);
+	
+	while(Calibration)
+	{
+		int newPosition = this->_encoder->read();
+		if(newPosition == Position)
+		{
+			Calibration = false;
+		}
+		Position = newPosition;
+	}
+	
+	//Serial.println(Position);
+	
+	return Position;
 }
