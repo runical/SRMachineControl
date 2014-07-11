@@ -36,7 +36,6 @@ PhysicalSwitch::PhysicalSwitch(int switchnumber, int pin)
 	pinMode(pin, OUTPUT);
 	this->_state = true;
 	this->_pin = pin;
-	this->_switchNumber = switchnumber;
 	this->Deactivate();
 }
 
@@ -45,7 +44,7 @@ void PhysicalSwitch::Activate()
 	// Activate a switch
 	if(not this->_state)
 	{
-		digitalWrite(_pin, HIGH);
+		digitalWrite(this->_pin, HIGH);
 		this->_state = true;
 		//Serial.print("ON: ");
 		//Serial.print(this->_switchNumber);
@@ -58,17 +57,12 @@ void PhysicalSwitch::Deactivate()
 	// Deactivate a switch
 	if(this->_state)
 	{
-		digitalWrite(_pin, LOW);
+		digitalWrite(this->_pin, LOW);
 		this->_state = false;
 		//Serial.print("ON: ");
 		//Serial.print(this->_switchNumber);
 		//Serial.println(" ");
 	}
-}
-
-int PhysicalSwitch::GetSwitchNumber()
-{
-	return this->_switchNumber;
 }
 
 //////////////////////////////////////////
@@ -129,45 +123,58 @@ PhysicalSwitch** SwitchState::GetSwitches()
 	return _activeSwitches;
 }
 
-void SwitchState::SetTransition(int transition)
+//////////////////////////////////////////////
+//				InverterStage				//
+//////////////////////////////////////////////
+
+InverterStage::InverterStage(SwitchState* topState)
 {
-	this->_transition = transition;
+	// Initialize the InverterStage. Only stores the topstate.
+	this->_currentState = topState;
+	this->_startState = topState;
 }
 
-int SwitchState::GetTransition()
+void InverterStage::TurnOff()
 {
-	return this->_transition;
-}
-
-//////////////////////////////////////////
-//				Bridge					//
-//////////////////////////////////////////
-
-Bridge::Bridge(int numberOfSwitches, PhysicalSwitch** switches)
-{
-	// Initialize the Bridge. It takes all of the switches associated with the bridge.
-	_nSwitches = numberOfSwitches;
-	_switches = switches;
-}
-
-void Bridge::TurnOff()
-{
-	// Turn off the switches associated with this bridge.
+	// Turn off the current state
+	int limit = this->_currentState->GetNumberOfSwitches();
+	PhysicalSwitch** tempSwitches = this->_currentState->GetSwitches();
+	
 	int i;
 	
-	for(i = 0 ; i < _nSwitches ; i++)
+	for(i = 0 ; i < limit ; i++)
 	{
-		_switches[i]->Deactivate();
+		tempSwitches[i]->Deactivate();
 	}
 }
 
-void Bridge::ActivateState(SwitchState* activatedState)
+void InverterStage::ActivateNextState()
 {
-	// Activate the switches associated with the given state
-	// Next version might include matching with bridge associated switches
+	this->ActivateState(this->_currentState->GetNext());
+}
+
+void InverterStage::ActivatePreviousState()
+{
+	this->ActivateState(this->_currentState->GetPrevious());
+}
+
+void InverterStage::ActivateCurrentState()
+{
+	this->ActivateState(this->_currentState);
+}
+
+// Private ActivateState, because this makes the other interface functions easier.
+
+void InverterStage::ActivateState(SwitchState* activatedState)
+{
+	// Activates the given SwitchState, while also deactivating the current state (to prevent double activation)
+	
+	// First, turn OFF the current state
+	this->TurnOff();
+	
+	// Then, get the relevant switches and turn them ON
 	int limit = activatedState->GetNumberOfSwitches();
 	PhysicalSwitch** tempSwitches = activatedState->GetSwitches();
-	this->TurnOff();
 	
 	int i;
 	
@@ -175,210 +182,255 @@ void Bridge::ActivateState(SwitchState* activatedState)
 	{
 		tempSwitches[i]->Activate();
 	}
+	
+	// Lastly, save the activated state as the CURRENT state.
+	// This way, we can never lose track of the state and rule out 
+	// any possible errors related to turning 2 sets of switches on.
+	this->_currentState = activatedState;
 }
 
 //////////////////////////////////////////
 // 				Controller				//
 //////////////////////////////////////////
 
-// The controller implements the logic (and most other meta functionality)
+// The controller implements the logic and setup.
 
-Controller::Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset)
+Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int direction)
 {
+	Serial.begin(9600);
+	Serial.println("Initializing controller");
+	
 	// Init the needed objects
-	this->_startState = topState;
-	this->_currentState = topState;
-	this->_bridge = theBridge;
 	this->_encoder = theEncoder;
+	this->_inverterStage = new InverterStage(topState);
 	
-	// Init variables
-	this->_pulsesPerRev = pulsesPerRev;
-	this->_eRevPerMRev = eRevPerMRev;
-	this->_nStates = nStates;
-	this->_offset = offset;
-}
-
-void Controller::ActivateNextState()
-{
-	// Activate the state that is next in line from the current state
-	this->_currentState = this->_currentState->GetNext();
-	this->_bridge->ActivateState(this->_currentState);
-}
-
-void Controller::ActivatePreviousState()
-{
-	// Activate the state that is the previous in the ring from the current state
-	this->_currentState = this->_currentState->GetPrevious();
-	this->_bridge->ActivateState(this->_currentState);
-}
-
-void Controller::ActivateCurrentState()
-{
-	this->_bridge->ActivateState(this->_currentState);
-}
-
-void Controller::CalculateTransitions(int calibrationOffset)
-{
-	// Calculation of the new transition point, given by the pulses per revolution, number of states and the difference in electrical and mechanical speeds.
-	float transition = (float) ((calibrationOffset + this->_offset + this->_pulsesPerRev) % this->_pulsesPerRev);
-	float increment = ((float) this->_pulsesPerRev) / ( ( float ) (this->_nStates * this->_eRevPerMRev) );
-	
-	SwitchState* theState = this->_startState;
-	
-	do
+	// Init known variables (and check given variables)
+	// The variables that are not here are to be calculated
+	this->_endPosition = 0;
+	if(direction < 0)
 	{
-		// First get the next state so that the positions are exactly 1 transition out of sync.
-		theState = theState->GetNext();
-		
-		// First add 0.5 before typecasting to make the rounding correct.
-		// mod pulsesPerRev to keep within the boundaries of the transitions.
-		int newTransition = ( ( int ) (transition + 0.5) ) % this->_pulsesPerRev;
-		
-		Serial.print(transition);
-		Serial.print(" -> ");
-		Serial.println(newTransition);
-		
-		theState->SetTransition(newTransition);
-		
-		// Then calculate the next transition and select the next state.
-		transition = transition + increment;
-	} while( theState != this->_startState);
+		this->_direction = -1;
+	}
+	else
+	{
+		this->_direction = 1;
+	}
 	
+	// Calculate error and error correction
+	/* 
+	 * This is done by finding the error on a complete mechenical rev.
+	 * The  number of states the system goes through per mechanical rev is also derived.
+	 * Then, we find the greatest common divider (with the gcd algorithm), divide 
+	 * both of them by this gcd and save the result. Then repeating this untill the gcd
+	 * is 1. This gives us the smallest possible integer amount of switching states with 
+	 * the smalles error to correct.
+	 */
+	
+	Serial.println("Starting the calculations");
+	
+	this->_correctionCondition = eRevPerMRev*nStates;
+	this->_increase = (int) ( (float) pulsesPerRev / (float) this->_correctionCondition );
+	
+	this->_error = pulsesPerRev - (this->_increase * this->_correctionCondition);
+	int factor;
+	
+	do{
+		if(this->_error > this->_correctionCondition)
+		{
+			factor = this->gcd(this->_error, this->_correctionCondition);
+		}
+		else
+		{
+			factor = this->gcd(this->_correctionCondition, this->_error);
+		}
+		this->_error = this->_error/factor;
+		this->_correctionCondition = this->_correctionCondition/factor;
+	} while(factor != 1);
+	
+	this->_switchingCounter = 0;
+	
+	Serial.print("error = ");
+	Serial.println(this->_error);
+	Serial.print("correctionCondition = ");
+	Serial.println(this->_correctionCondition);
+	
+	// Calibration?
+	Serial.println("Starting with calibration in 10 seconds");
+	delay(1000*10);
+	if(this->Calibrate() == false)
+	{
+		Serial.println("Error in the calibration, startup aborted.");
+		return;
+	}
+	
+	// Activate the next or previous state, depending on the direction.
+	Serial.println("Starting the motor");
+	this->_overflow = this->CalculateNext();
+	Serial.end();
+	if( direction == -1 )
+	{
+		this->_inverterStage->ActivatePreviousState();
+	}
+	else if( direction == 1 )
+	{
+		this->_inverterStage->ActivateNextState();
+	}
 }
 
 void Controller::Logic()
 {
 	// The controller logic.
-	// First get the next state for the relevant information.	
-	SwitchState* NextState = this->_currentState->GetNext();
-	SwitchState* NextNextState = NextState->GetNext();
+	// It is the differential algorithm
 	
-	/* 
-	 * In the case that the transition goes through 0, we have 2 problems:
-	 * 1. Compare a number that will be smaller wo an higher number, providing to much advancement (until encoder reset)
-	 * 2. Compare a huge number to a potentially small number, inhibiting the advancement, thus stalling the motor.
-	 * 
-	 * So, first we start with comparing the transitions of the current and next state.
-	 * This gives us if there will be a zero crossing (if current > next)
-	 * We can then solve that by making sure that the encoder is not only bigger than the transition number of the next state 
-	 * AND smaller than the transition number of the current state. If this is correct, we advance to the next state.
-	 * 
-	 * Secondly, we need to catch small intervals. We do this by essentially the same thing. We compare the next two states'
-	 * transition number. If the next one is bigger than the one after it, ther is a zero crossing and thus we need extra rules.
-	 * The rules are that the encoder position must be bigger than the transition number of the next state OR smaller than the 
-	 * transition number of the current state.
-	 * 
-	 * If neither of these is the case, we can just compare the normal way (next state's transition number is smaller than the position)
-	*/
-	    
-	   
-	if( NextState->GetTransition() < _currentState->GetTransition()) // First case
+	int position = this->_encoder->read();
+	
+	if(this->_direction == 1)
 	{
-		if( (NextState->GetTransition() <= (this->_encoder->read()) && this->_encoder->read() < this->_currentState->GetTransition()) )
+		// Positive Direction
+		if( this->_overflow )
 		{
-			this->ActivateNextState();
+			if( position >= this->_endPosition && position < this->_startPosition )
+			{
+				this->_inverterStage->ActivateNextState();
+				this->_overflow = this->CalculateNext();
+			}
 		}
-	}
-	else if( NextNextState->GetTransition() < NextState->GetTransition() ) // Second case
-	{
-		if( ( this->_encoder->read() >= NextState->GetTransition() ) || ( this->_encoder->read() <= this->_currentState->GetTransition() ) )
+		else if( position >= this->_endPosition || position < this->_startPosition )
 		{
-			this->ActivateNextState();
+			this->_inverterStage->ActivateNextState();
+			this->_overflow = this->CalculateNext();
 		}
+		return;
 	}
-	else if( ( this->_encoder->read() >= NextState->GetTransition() ) ) // The rest
+	else if(this->_direction == -1)
 	{
-		this->ActivateNextState();
+		// Negative Direction
+		if( this->_overflow )
+		{
+			if( position <= this->_endPosition && position > this->_startPosition )
+			{
+				this->_inverterStage->ActivatePreviousState();
+				this->_overflow = this->CalculateNext();
+			}
+		}
+		else if( position <= this->_endPosition || position > this->_startPosition )
+		{
+			this->_inverterStage->ActivatePreviousState();
+			this->_overflow = this->CalculateNext();
+		}
+		return;
 	}
-	
-	return;
+	else
+	{
+		Serial.begin(9600);
+		Serial.println("Error: Direction not defined correctly");
+		return;
+	}
 }
 
-void Controller::Setup()
+bool Controller::CalculateNext()
 {
-	// Finding the index pulse
-	static bool FirstTime = true;
-	static int oldPosition = 0;
+	// Calculate the next step.
+	// bidirectional
+	this->_startPosition = this->_endPosition;
+	this->_endPosition = this->_endPosition + this->_direction * ( this->_increase + this->Correction() );
 	
-	if(FirstTime)
+	// Find overflow
+	if( ( this->_direction * this->_endPosition ) < ( this->_direction * this->_startPosition ) )
 	{
-		Serial.println("Turn the encoder to find the index pulse");
-		FirstTime = false;
+		// Overflow in the positive direction, so endPosition < startPosition
+		// OR overflow in the negative direction, so endPosition > startPosition (or -endPosition < -startPosition)
+		return true;
 	}
-	
-	int newPosition = _encoder->read();
-	if (newPosition != oldPosition) 
+	else
 	{
-		oldPosition = newPosition;
-		Serial.println(oldPosition);
+		// Otherwise, there is no overflow
+		return false;
 	}
 }
 
-void Controller::Startup(int secondsDelay)
+int Controller::Correction()
 {
-	Serial.print("Please turn on the power. After a ");
-	Serial.print(secondsDelay);
-	Serial.println(" second delay the motor will be calibrated and the transitions will be calculated.");
-	Serial.println("Please stand back.");
-	
-	int c;
-	
-	for(c = 0 ; c < secondsDelay ; c++)
+	if(this->_switchingCounter == this->_correctionCondition)
 	{
-		Serial.println(secondsDelay - c);
-		delay(1000);
+		this->_switchingCounter = 0;
+		return this->_error;
 	}
-	
-	// Calibrate
-	Serial.println("Starting calibration. Please make sure that the power is on.");
-	//int calibrationOffset = this->Calibrate();
-	this->Calibrate();
-	
-	// Set up the transitions
-	//this->CalculateTransitions(calibrationOffset);
-	
-	// Let something know
-	Serial.print("Motor calibrated. Please stand back. The motor will start in ");
-	Serial.print(secondsDelay);
-	Serial.println(" seconds.");
-	
-	for(c = 0 ; c < secondsDelay ; c++)
-	{
-		Serial.println(secondsDelay - c);
-		delay(1000);
-	}
-	
-	Serial.print("Encoder: ");
-	Serial.println(this->_encoder->read());
-	Serial.println("End of messages.");
-	Serial.end();
+	this->_switchingCounter = this->_switchingCounter + 1;
+	return 0;
 }
 
-void Controller::Calibrate()
+int Controller::gcd(int x, int y)
 {
-	this->ActivateCurrentState();
+	// Calculates the greates common divider. Only positive numbers and y must be the smaller number (x >= y).
+	if( y == 0 )
+	{
+		return x;
+	}
+	return this->gcd(y, x % y);
+}
+
+bool Controller::Calibrate()
+{
+	int oldPosition = this->_encoder->read();
+	bool calibrate = false;
 	
-	int transition;
+	this->_inverterStage->ActivateCurrentState();
 	
-	do
+	while( calibrate == false )
 	{
 		delay(5000);
-		transition = (this->_encoder->read() + this->_offset + this->_pulsesPerRev) % this->_pulsesPerRev;
-		
-		this->ActivateNextState();
-		this->_currentState->SetTransition(transition);
-		Serial.println(transition);
-	} while(this->_currentState != this->_startState);
+		if(this->_encoder->read() != oldPosition)
+		{
+			this->_encoder->write(0);
+			calibrate = true;
+		}
+		else if( this->_direction < 0 )
+		{
+			this->_inverterStage->ActivatePreviousState();
+		}
+		else if( this->_direction > 0 )
+		{
+			this->_inverterStage->ActivateNextState();
+		}
+		else
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
-void Controller::Step(int secondsDelay)
+void Controller::Step(int seconddelay)
 {
-	int c;
-	
-	this->ActivateNextState();
-	
-	for(c = 0 ; c < secondsDelay ; c++)
+	if(this->_direction == 1)
 	{
-		delay(1000);
+		this->_inverterStage->ActivateNextState();
+		Serial.println("Next state activated");
 	}
+	else if(this->_direction == -1)
+	{
+		this->_inverterStage->ActivatePreviousState();
+		Serial.println("Previous state activated");
+	}
+	else
+	{
+		Serial.println("Something has gone horribly wrong");
+	}
+	delay(seconddelay*1000);
 }
+
+/*
+void Controller::ToggleDirection()
+{
+	// First change the direction counter, because we start counting backwards
+	// This means that we first have to count back the amount we already have counted for the other direction.
+	this->_switchingCounter = this->_correctionCondition - this->_switchingCounter;
+	
+	// Invert the direction to change direction
+	this->_direction = -this->_direction;
+	
+	// Think about what happens when the direction changes.
+	// Something about stopping the motor first, then do something else?
+}
+*/

@@ -32,17 +32,16 @@ class PhysicalSwitch
 {
    /* PhysicalSwitch:
     * The abstraction of a switch in the bridge circuit.
-    * Can be activated, deactivated and the associated pin can be extracted.
+    * Can be activated and deactivated.
+    * It saves state to prevent reactivation of a pin (thus introducing unknow behaviour)
     */
 
    public:
      PhysicalSwitch(int number, int pin);
      void Activate();
      void Deactivate();
-     int GetSwitchNumber();
    private:
      int _pin;
-     int _switchNumber;
      bool _state;
 };
 
@@ -53,43 +52,48 @@ class SwitchState
     * Keeps track of which switches should be activated to obtain the state.
     *
     * This is organized in a double looped ring construct which carries sequence information.
+    * 
+    * Only for storing information
     */
 
    public:
      SwitchState(PhysicalSwitch** activeSwitches, int nSwitches);
-     SwitchState* GetNext();
-     SwitchState* GetPrevious();
      void InsertSwitchState(SwitchState* insertedState);
+		// Setters
      void SetNext(SwitchState* insertedState);
      void SetPrevious(SwitchState* insertedState);
+		// Getters
      int GetNumberOfSwitches();
      PhysicalSwitch** GetSwitches();
-     int GetTransition();
-     void SetTransition(int transition);
+     SwitchState* GetNext();
+     SwitchState* GetPrevious();
    private:
      PhysicalSwitch** _activeSwitches;
      int _nSwitches;
-     int _transition;
      SwitchState* _next;
      SwitchState* _previous;
 };
 
-class Bridge
+class InverterStage
 {
-  /* Bridge:
-   * The abstract layer of the (a)symmetric bridge circuit used to drive the SRM.
+  /* InverterStage:
+   * The abstract layer of the inverter circuit used to drive the SRM.
    * It contains the switches and all of the possible states of the drive.
    * 
-   * The Bridge changes the state and resets all of the switches when needed.
+   * The InverterStage keeps track of the state and changes the state of the switches.
    */
 
   public:
-    Bridge(int numberOfSwitches, PhysicalSwitch** switches);
-    void ActivateState(SwitchState* activatedState);
+    InverterStage(SwitchState* topState);
     void TurnOff();
+    void ActivateNextState();
+    void ActivatePreviousState();
+    void ActivateCurrentState();
   private:
-    int _nSwitches;
-    PhysicalSwitch** _switches;
+    SwitchState* _startState;
+    SwitchState* _currentState;
+    void ActivateState(SwitchState* activatedState);
+    void DeactivateState(SwitchState* deactivatedState);
 };
 
 class Controller
@@ -99,23 +103,24 @@ class Controller
     */
 
    public:
-     Controller(SwitchState* topState, Bridge* theBridge, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset);
-     void Setup();
-     void Startup(int secondsDelay);
+     Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int direction);
      void Logic();
-     void CalculateTransitions(int calibrationOffset);
-     void Step(int secondsDelay);
-     void Calibrate();
+     bool CalculateNext();
+     void Step(int seconddelay);
    private:
-     void ActivateNextState();
-     void ActivatePreviousState();
-     void ActivateCurrentState();
+     // Function
+     int Correction();
+     int gcd(int x, int y);
+     bool Calibrate();
+     // Variables
      Encoder* _encoder;
-     Bridge* _bridge;
-     SwitchState* _startState;
-     SwitchState* _currentState;
-     int _pulsesPerRev;
-	 int _eRevPerMRev;
-	 int _nStates;
-	 int _offset;
+     InverterStage* _inverterStage;
+     int _endPosition;
+     int _startPosition;
+     int _increase;
+     int _switchingCounter;
+     int _correctionCondition;
+     int _error;
+     bool _overflow;
+     int _direction; // values 1 or -1 accepted
 };
