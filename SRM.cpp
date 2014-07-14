@@ -37,6 +37,10 @@ PhysicalSwitch::PhysicalSwitch(int switchnumber, int pin)
 	this->_state = true;
 	this->_pin = pin;
 	this->Deactivate();
+	
+	static int number = 1;
+	this->_switchnumber = number;
+	number++;
 }
 
 void PhysicalSwitch::Activate()
@@ -76,6 +80,10 @@ SwitchState::SwitchState(PhysicalSwitch** activeSwitches, int nSwitches)
 	this->_nSwitches = nSwitches;
 	this->_next = this;
 	this->_previous = this;
+	
+	static int number = 1;
+	this->_statenumber = number;
+	number++;
 }
 
 void SwitchState::InsertSwitchState(SwitchState* insertedState)
@@ -142,10 +150,12 @@ void InverterStage::TurnOff()
 	
 	int i;
 	
+	//noInterrupts();
 	for(i = 0 ; i < limit ; i++)
 	{
 		tempSwitches[i]->Deactivate();
 	}
+	//interrupts();
 }
 
 void InverterStage::ActivateNextState()
@@ -169,19 +179,23 @@ void InverterStage::ActivateState(SwitchState* activatedState)
 {
 	// Activates the given SwitchState, while also deactivating the current state (to prevent double activation)
 	
-	// First, turn OFF the current state
-	this->TurnOff();
-	
 	// Then, get the relevant switches and turn them ON
 	int limit = activatedState->GetNumberOfSwitches();
 	PhysicalSwitch** tempSwitches = activatedState->GetSwitches();
 	
 	int i;
 	
+	// First, turn OFF the current state
+	this->TurnOff();
+	
+	// Turn the new switches ON
+	
+	//noInterrupts();
 	for(i = 0 ; i < limit ; i++)
 	{
 		tempSwitches[i]->Activate();
 	}
+	//interrupts();
 	
 	// Lastly, save the activated state as the CURRENT state.
 	// This way, we can never lose track of the state and rule out 
@@ -206,7 +220,6 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	
 	// Init known variables (and check given variables)
 	// The variables that are not here are to be calculated
-	this->_endPosition = 0;
 	if(direction < 0)
 	{
 		this->_direction = -1;
@@ -215,6 +228,9 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	{
 		this->_direction = 1;
 	}
+	
+	this->_startPosition = this->_direction * offset;
+	this->_endPosition = this->_direction * offset;
 	
 	// Calculate error and error correction
 	/* 
@@ -257,24 +273,13 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	// Calibration?
 	Serial.println("Starting with calibration in 10 seconds");
 	delay(1000*10);
-	if(this->Calibrate() == false)
-	{
-		Serial.println("Error in the calibration, startup aborted.");
-		return;
-	}
+	this->Calibrate();
 	
 	// Activate the next or previous state, depending on the direction.
 	Serial.println("Starting the motor");
 	this->_overflow = this->CalculateNext();
 	Serial.end();
-	if( direction == -1 )
-	{
-		this->_inverterStage->ActivatePreviousState();
-	}
-	else if( direction == 1 )
-	{
-		this->_inverterStage->ActivateNextState();
-	}
+	this->Step(5);
 }
 
 void Controller::Logic()
@@ -292,12 +297,14 @@ void Controller::Logic()
 			if( position >= this->_endPosition && position < this->_startPosition )
 			{
 				this->_inverterStage->ActivateNextState();
+				//Serial.println("Switch!");
 				this->_overflow = this->CalculateNext();
 			}
 		}
-		else if( position >= this->_endPosition || position < this->_startPosition )
+		else if( position >= this->_endPosition )// || position < this->_startPosition )
 		{
 			this->_inverterStage->ActivateNextState();
+			//Serial.println("Switch!");
 			this->_overflow = this->CalculateNext();
 		}
 		return;
@@ -310,20 +317,16 @@ void Controller::Logic()
 			if( position <= this->_endPosition && position > this->_startPosition )
 			{
 				this->_inverterStage->ActivatePreviousState();
+				//Serial.println("Switch!");
 				this->_overflow = this->CalculateNext();
 			}
 		}
-		else if( position <= this->_endPosition || position > this->_startPosition )
+		else if( position <= this->_endPosition )//|| position > this->_startPosition )
 		{
 			this->_inverterStage->ActivatePreviousState();
+			//Serial.println("Switch!");
 			this->_overflow = this->CalculateNext();
 		}
-		return;
-	}
-	else
-	{
-		Serial.begin(9600);
-		Serial.println("Error: Direction not defined correctly");
 		return;
 	}
 }
@@ -332,7 +335,7 @@ bool Controller::CalculateNext()
 {
 	// Calculate the next step.
 	// bidirectional
-	this->_startPosition = this->_endPosition;
+	this->_startPosition = this->_endPosition - this->_direction * this->_increase;
 	this->_endPosition = this->_endPosition + this->_direction * ( this->_increase + this->Correction() );
 	
 	// Find overflow
@@ -351,12 +354,12 @@ bool Controller::CalculateNext()
 
 int Controller::Correction()
 {
+	this->_switchingCounter = this->_switchingCounter + 1;
 	if(this->_switchingCounter == this->_correctionCondition)
 	{
 		this->_switchingCounter = 0;
 		return this->_error;
 	}
-	this->_switchingCounter = this->_switchingCounter + 1;
 	return 0;
 }
 
@@ -379,58 +382,27 @@ bool Controller::Calibrate()
 	
 	while( calibrate == false )
 	{
-		delay(5000);
-		if(this->_encoder->read() != oldPosition)
+		delay(1000);
+		if(this->_encoder->read() == oldPosition)
 		{
 			this->_encoder->write(0);
 			calibrate = true;
 		}
-		else if( this->_direction < 0 )
-		{
-			this->_inverterStage->ActivatePreviousState();
-		}
-		else if( this->_direction > 0 )
-		{
-			this->_inverterStage->ActivateNextState();
-		}
-		else
-		{
-			return false;
-		}
+		oldPosition = this->_encoder->read();
 	}
+	this->_inverterStage->TurnOff();
 	return true;
 }
 
 void Controller::Step(int seconddelay)
 {
+	delay(seconddelay*1000);
 	if(this->_direction == 1)
 	{
 		this->_inverterStage->ActivateNextState();
-		Serial.println("Next state activated");
 	}
 	else if(this->_direction == -1)
 	{
 		this->_inverterStage->ActivatePreviousState();
-		Serial.println("Previous state activated");
 	}
-	else
-	{
-		Serial.println("Something has gone horribly wrong");
-	}
-	delay(seconddelay*1000);
 }
-
-/*
-void Controller::ToggleDirection()
-{
-	// First change the direction counter, because we start counting backwards
-	// This means that we first have to count back the amount we already have counted for the other direction.
-	this->_switchingCounter = this->_correctionCondition - this->_switchingCounter;
-	
-	// Invert the direction to change direction
-	this->_direction = -this->_direction;
-	
-	// Think about what happens when the direction changes.
-	// Something about stopping the motor first, then do something else?
-}
-*/

@@ -40,6 +40,7 @@ class PhysicalSwitch
      PhysicalSwitch(int number, int pin);
      void Activate();
      void Deactivate();
+     int _switchnumber;
    private:
      int _pin;
      bool _state;
@@ -67,6 +68,7 @@ class SwitchState
      PhysicalSwitch** GetSwitches();
      SwitchState* GetNext();
      SwitchState* GetPrevious();
+     int _statenumber;
    private:
      PhysicalSwitch** _activeSwitches;
      int _nSwitches;
