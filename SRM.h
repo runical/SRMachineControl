@@ -114,6 +114,7 @@ class Controller
      int Correction();
      int gcd(int x, int y);
      bool Calibrate();
+     void ControllerDelay(int secondsDelay);
      // Variables
      Encoder* _encoder;
      InverterStage* _inverterStage;

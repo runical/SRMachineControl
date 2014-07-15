@@ -50,9 +50,9 @@ void PhysicalSwitch::Activate()
 	{
 		digitalWrite(this->_pin, HIGH);
 		this->_state = true;
-		Serial.print("ON: ");
-		Serial.print(this->_switchnumber);
-		Serial.println(" ");
+		//Serial.print("ON: ");
+		//Serial.print(this->_switchnumber);
+		//Serial.println(" ");
 	}
 }
 
@@ -63,9 +63,9 @@ void PhysicalSwitch::Deactivate()
 	{
 		digitalWrite(this->_pin, LOW);
 		this->_state = false;
-		Serial.print("OFF: ");
-		Serial.print(this->_switchnumber);
-		Serial.println(" ");
+		//Serial.print("OFF: ");
+		//Serial.print(this->_switchnumber);
+		//Serial.println(" ");
 	}
 }
 
@@ -153,12 +153,10 @@ void InverterStage::TurnOff()
 	Serial.print("Turning OFF: State ");
 	Serial.println(this->_currentState->_statenumber);
 	
-	//noInterrupts();
 	for(i = 0 ; i < limit ; i++)
 	{
 		tempSwitches[i]->Deactivate();
 	}
-	//interrupts();
 }
 
 void InverterStage::ActivateNextState()
@@ -195,13 +193,11 @@ void InverterStage::ActivateState(SwitchState* activatedState)
 	Serial.print("Turning ON: State ");
 	Serial.println(activatedState->_statenumber);
 		
-	//noInterrupts();
 	for(i = 0 ; i < limit ; i++)
 	{
 		tempSwitches[i]->Activate();
 	}
-	//interrupts();
-	
+		
 	// Lastly, save the activated state as the CURRENT state.
 	// This way, we can never lose track of the state and rule out 
 	// any possible errors related to turning 2 sets of switches on.
@@ -270,6 +266,8 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	
 	this->_switchingCounter = 0;
 	
+	Serial.print("increase = ");
+	Serial.println(this->_increase);
 	Serial.print("error = ");
 	Serial.println(this->_error);
 	Serial.print("correctionCondition = ");
@@ -277,13 +275,21 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	
 	// Calibration?
 	Serial.println("Starting with calibration in 10 seconds");
-	delay(1000*10);
+	this->ControllerDelay(10);
 	this->Calibrate();
+	
+	Serial.println("Initial conditions:");
+	Serial.print("startPosition: ");
+	Serial.println(this->_startPosition);
+	Serial.print("endPosition: ");
+	Serial.println(this->_endPosition);
+	Serial.print("Position: ");
+	Serial.println(this->_encoder->read());
 	
 	// Activate the next or previous state, depending on the direction.
 	Serial.println("Starting the motor");
 	this->_overflow = this->CalculateNext();
-	this->Step(5);
+	this->Step();
 }
 
 void Controller::Logic()
@@ -386,26 +392,26 @@ bool Controller::Calibrate()
 	
 	while( calibrate == false )
 	{
-		delay(1000);
+		this->ControllerDelay(1);
+		
 		if(this->_encoder->read() == oldPosition)
 		{
+			Serial.print("Position before reset: ");
+			Serial.println(this->_encoder->read());
 			this->_encoder->write(0);
 			calibrate = true;
 		}
 		oldPosition = this->_encoder->read();
 	}
 	this->_inverterStage->TurnOff();
+	Serial.print("Position after reset: ");
+	Serial.println(this->_encoder->read());
 	return true;
 }
 
 void Controller::Step(int seconddelay)
-{
-	Serial.print("startPosition: ");
-	Serial.println(this->_startPosition);
-	Serial.print("endPosition: ");
-	Serial.println(this->_endPosition);
-	Serial.print("Position: ");
-	Serial.println(this->_encoder->read());
+{	
+	this->ControllerDelay(seconddelay);
 	
 	if(this->_direction == 1)
 	{
@@ -415,5 +421,37 @@ void Controller::Step(int seconddelay)
 	{
 		this->_inverterStage->ActivatePreviousState();
 	}
-	delay(seconddelay*1000);
+	
+	this->ControllerDelay(seconddelay);
+	
+	Serial.print("startPosition: ");
+	Serial.println(this->_startPosition);
+	Serial.print("endPosition: ");
+	Serial.println(this->_endPosition);
+	Serial.print("Position: ");
+	Serial.println(this->_encoder->read());
+}
+
+void Controller::ControllerDelay(int secondsDelay)
+{
+	unsigned int startTime = millis();
+	if( secondsDelay < 0 )
+	{
+		secondsDelay = -secondsDelay;
+	}
+	unsigned int endTime = startTime + 1000*secondsDelay;
+	
+	bool delayed = true;
+	while(delayed)
+	{
+		unsigned int currentTime = millis();
+		if(endTime < currentTime && currentTime >= endTime && currentTime < startTime)
+		{
+			delayed = false;
+		}
+		else if(currentTime >= endTime || currentTime < startTime)
+		{
+			delayed = false;
+		}
+	}
 }
