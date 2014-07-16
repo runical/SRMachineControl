@@ -108,7 +108,7 @@ class Controller
      Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int direction);
      void Logic();
      bool CalculateNext();
-     void Step(int seconddelay);
+     void Step();
    private:
      // Function
      int Correction();

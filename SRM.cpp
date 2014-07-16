@@ -150,8 +150,8 @@ void InverterStage::TurnOff()
 	
 	int i;
 	
-	Serial.print("Turning OFF: State ");
-	Serial.println(this->_currentState->_statenumber);
+	//Serial.print("Turning OFF: State ");
+	//Serial.println(this->_currentState->_statenumber);
 	
 	for(i = 0 ; i < limit ; i++)
 	{
@@ -190,8 +190,8 @@ void InverterStage::ActivateState(SwitchState* activatedState)
 	this->TurnOff();
 	
 	// Turn the new switches ON
-	Serial.print("Turning ON: State ");
-	Serial.println(activatedState->_statenumber);
+	//Serial.print("Turning ON: State ");
+	//Serial.println(activatedState->_statenumber);
 		
 	for(i = 0 ; i < limit ; i++)
 	{
@@ -230,8 +230,9 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 		this->_direction = 1;
 	}
 	
-	this->_startPosition = this->_direction * offset;
+	this->_startPosition = this->_direction * (offset  - pulsesPerRev);
 	this->_endPosition = this->_direction * offset;
+	this->_overflow = false;
 	
 	// Calculate error and error correction
 	/* 
@@ -273,7 +274,7 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	Serial.print("correctionCondition = ");
 	Serial.println(this->_correctionCondition);
 	
-	// Calibration?
+	// Calibration
 	Serial.println("Starting with calibration in 10 seconds");
 	this->ControllerDelay(10);
 	this->Calibrate();
@@ -288,8 +289,7 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	
 	// Activate the next or previous state, depending on the direction.
 	Serial.println("Starting the motor");
-	this->_overflow = this->CalculateNext();
-	this->Step();
+	Serial.end();
 }
 
 void Controller::Logic()
@@ -306,15 +306,13 @@ void Controller::Logic()
 		{
 			if( position >= this->_endPosition && position < this->_startPosition )
 			{
-				//this->_inverterStage->ActivateNextState();
-				Serial.println("Switch!");
+				this->_inverterStage->ActivateNextState();
 				this->_overflow = this->CalculateNext();
 			}
 		}
-		else if( position >= this->_endPosition )// || position < this->_startPosition )
+		else if( position >= this->_endPosition || position < this->_startPosition )
 		{
-			//this->_inverterStage->ActivateNextState();
-			Serial.println("Switch!");
+			this->_inverterStage->ActivateNextState();
 			this->_overflow = this->CalculateNext();
 		}
 		return;
@@ -326,15 +324,13 @@ void Controller::Logic()
 		{
 			if( position <= this->_endPosition && position > this->_startPosition )
 			{
-				//this->_inverterStage->ActivatePreviousState();
-				Serial.println("Switch!");
+				this->_inverterStage->ActivatePreviousState();
 				this->_overflow = this->CalculateNext();
 			}
 		}
-		else if( position <= this->_endPosition )//|| position > this->_startPosition )
+		else if( position <= this->_endPosition || position > this->_startPosition )
 		{
-			//this->_inverterStage->ActivatePreviousState();
-			Serial.println("Switch!");
+			this->_inverterStage->ActivatePreviousState();
 			this->_overflow = this->CalculateNext();
 		}
 		return;
@@ -345,8 +341,10 @@ bool Controller::CalculateNext()
 {
 	// Calculate the next step.
 	// bidirectional
-	this->_startPosition = this->_endPosition - this->_direction * this->_increase;
-	this->_endPosition = this->_endPosition + this->_direction * ( this->_increase + this->Correction() );
+	int change = this->_direction * ( this->_increase + this->Correction() );
+	
+	this->_startPosition = this->_startPosition + change;
+	this->_endPosition = this->_endPosition + change;
 	
 	// Find overflow
 	if( ( this->_direction * this->_endPosition ) < ( this->_direction * this->_startPosition ) )
@@ -396,23 +394,17 @@ bool Controller::Calibrate()
 		
 		if(this->_encoder->read() == oldPosition)
 		{
-			Serial.print("Position before reset: ");
-			Serial.println(this->_encoder->read());
 			this->_encoder->write(0);
 			calibrate = true;
 		}
 		oldPosition = this->_encoder->read();
 	}
-	this->_inverterStage->TurnOff();
-	Serial.print("Position after reset: ");
-	Serial.println(this->_encoder->read());
+	//this->_inverterStage->TurnOff();
 	return true;
 }
 
-void Controller::Step(int seconddelay)
+void Controller::Step()
 {	
-	this->ControllerDelay(seconddelay);
-	
 	if(this->_direction == 1)
 	{
 		this->_inverterStage->ActivateNextState();
@@ -421,15 +413,6 @@ void Controller::Step(int seconddelay)
 	{
 		this->_inverterStage->ActivatePreviousState();
 	}
-	
-	this->ControllerDelay(seconddelay);
-	
-	Serial.print("startPosition: ");
-	Serial.println(this->_startPosition);
-	Serial.print("endPosition: ");
-	Serial.println(this->_endPosition);
-	Serial.print("Position: ");
-	Serial.println(this->_encoder->read());
 }
 
 void Controller::ControllerDelay(int secondsDelay)
