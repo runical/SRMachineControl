@@ -174,6 +174,11 @@ void InverterStage::ActivateCurrentState()
 	this->ActivateState(this->_currentState);
 }
 
+SwitchState* InverterStage::GetCurrentState()
+{
+	return this->_currentState;
+}
+
 // Private ActivateState, because this makes the other interface functions easier.
 
 void InverterStage::ActivateState(SwitchState* activatedState)
@@ -210,7 +215,7 @@ void InverterStage::ActivateState(SwitchState* activatedState)
 
 // The controller implements the logic and setup.
 
-Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int direction)
+Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int direction, int switchingdelay)
 {
 	
 	Serial.println("Initializing controller");
@@ -233,6 +238,8 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	this->_startPosition = this->_direction * (offset  - pulsesPerRev);
 	this->_endPosition = this->_direction * offset;
 	this->_overflow = false;
+	this->_switchingDelay = switchingdelay;
+	this->_startup = true;
 	
 	// Calculate error and error correction
 	/* 
@@ -290,11 +297,34 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	// Activate the next or previous state, depending on the direction.
 	Serial.println("Starting the motor");
 	Serial.end();
+	this->_switchingTime = millis() + this->_switchingDelay;
 }
 
 void Controller::Logic()
 {
 	// The controller logic.
+	if(this->_startup)
+	{
+		this->StepperLogic();
+	}
+	else
+	{
+		this->PositionLogic();
+	}
+}
+
+void Controller::StepperLogic()
+{
+	// Stepper logic for startup
+	if( millis() >= this->_switchingTime )
+	{
+		this->Step();
+		this->_switchingTime = this->_switchingTime + this->_switchingDelay;
+	}
+}
+
+void Controller::PositionLogic()
+{
 	// It is the differential algorithm
 	
 	int position = this->_encoder->read();
@@ -308,6 +338,7 @@ void Controller::Logic()
 			{
 				this->_inverterStage->ActivateNextState();
 				this->_overflow = this->CalculateNext();
+				Serial.println("Overflow");
 			}
 		}
 		else if( position >= this->_endPosition || position < this->_startPosition )
@@ -326,6 +357,7 @@ void Controller::Logic()
 			{
 				this->_inverterStage->ActivatePreviousState();
 				this->_overflow = this->CalculateNext();
+				Serial.println("Overflow");
 			}
 		}
 		else if( position <= this->_endPosition || position > this->_startPosition )
@@ -437,4 +469,23 @@ void Controller::ControllerDelay(int secondsDelay)
 			delayed = false;
 		}
 	}
+}
+
+void Controller::ToggleStartup()
+{
+	this->_encoder->write(0);
+	
+	this->_startup = !this->_startup;
+		
+	this->_switchingTime = millis() + this->_switchingDelay;
+	
+	if(this->_startup)
+	{
+		Serial.println("To timed control");
+	}
+	else
+	{
+		Serial.println("To position control");
+	}
+	
 }

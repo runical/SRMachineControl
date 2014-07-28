@@ -91,6 +91,7 @@ class InverterStage
     void ActivateNextState();
     void ActivatePreviousState();
     void ActivateCurrentState();
+    SwitchState* GetCurrentState();
   private:
     SwitchState* _startState;
     SwitchState* _currentState;
@@ -105,10 +106,13 @@ class Controller
     */
 
    public:
-     Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int direction);
+     Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPerRev, int eRevPerMRev, int nStates, int offset, int direction, int switchingdelay);
      void Logic();
      bool CalculateNext();
      void Step();
+     void StepperLogic();
+     void PositionLogic();
+     void ToggleStartup();
    private:
      // Function
      int Correction();
@@ -126,4 +130,7 @@ class Controller
      int _error;
      bool _overflow;
      int _direction; // values 1 or -1 accepted
+     int _switchingDelay;
+     unsigned int _switchingTime;
+     bool _startup;
 };
