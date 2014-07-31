@@ -60,18 +60,23 @@ class SwitchState
    public:
      SwitchState(PhysicalSwitch** activeSwitches, int nSwitches);
      void InsertSwitchState(SwitchState* insertedState);
+     SwitchState* Clone();
 		// Setters
      void SetNext(SwitchState* insertedState);
      void SetPrevious(SwitchState* insertedState);
+     void SetInterval(int start, int stop);
 		// Getters
      int GetNumberOfSwitches();
      PhysicalSwitch** GetSwitches();
      SwitchState* GetNext();
      SwitchState* GetPrevious();
+     int* GetInterval();
      int _statenumber;
+     bool _exception;
    private:
      PhysicalSwitch** _activeSwitches;
      int _nSwitches;
+     int _interval[2];
      SwitchState* _next;
      SwitchState* _previous;
 };
@@ -92,6 +97,7 @@ class InverterStage
     void ActivatePreviousState();
     void ActivateCurrentState();
     SwitchState* GetCurrentState();
+    void Expand(int eRevPerMRev, int nStates);
   private:
     SwitchState* _startState;
     SwitchState* _currentState;
@@ -112,25 +118,21 @@ class Controller
      void Step();
      void StepperLogic();
      void PositionLogic();
-     void ToggleStartup();
    private:
      // Function
-     int Correction();
+     int Change();
      int gcd(int x, int y);
-     bool Calibrate();
      void ControllerDelay(int secondsDelay);
      // Variables
      Encoder* _encoder;
      InverterStage* _inverterStage;
-     int _endPosition;
-     int _startPosition;
      int _increase;
      int _switchingCounter;
      int _correctionCondition;
      int _error;
-     bool _overflow;
-     int _direction; // values 1 or -1 accepted
+     int _direction; // values 1 or -1 accepted [Maybe change to a define?]
      int _switchingDelay;
      unsigned int _switchingTime;
      bool _startup;
+     int* _interval;
 };

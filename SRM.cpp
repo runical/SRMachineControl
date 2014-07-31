@@ -81,7 +81,7 @@ SwitchState::SwitchState(PhysicalSwitch** activeSwitches, int nSwitches)
 	this->_next = this;
 	this->_previous = this;
 	
-	static int number = 1;
+	static int number = 0;
 	this->_statenumber = number;
 	number++;
 }
@@ -107,6 +107,19 @@ void SwitchState::SetPrevious(SwitchState* insertedState)
 	_previous = insertedState;
 }
 
+void SwitchState::SetInterval(int start, int stop)
+{
+	this->_interval = {start, stop};
+	if( start > stop )
+	{
+		this->_exception = true;
+	}
+	else
+	{
+		this->_exception = false;
+	}
+}
+
 SwitchState* SwitchState::GetNext()
 {
 	// get the _next variable
@@ -129,6 +142,18 @@ PhysicalSwitch** SwitchState::GetSwitches()
 {
 	// Get the switches associated with the variable
 	return _activeSwitches;
+}
+
+int* SwitchState::GetInterval()
+{
+	return this->_interval;
+}
+
+SwitchState* SwitchState::Clone()
+{
+	// Create a state with the same switches
+	SwitchState* clonedState = new SwitchState(this->_activeSwitches, this->_nSwitches);
+	return clonedState;
 }
 
 //////////////////////////////////////////////
@@ -209,6 +234,30 @@ void InverterStage::ActivateState(SwitchState* activatedState)
 	this->_currentState = activatedState;
 }
 
+void InverterStage::Expand(int eRevPerMRev, int nStates)
+{
+	// Expands the current amount of states to the amount of states given by
+	// the number of states times the number of electrical revolutions per
+	// mechanical revolution
+	
+	int i;
+	
+	for(i = 1 ; i < eRevPerMRev ; i++)
+	{
+		SwitchState* StartState = this->_startState;
+		SwitchState* CurrentState = StartState;
+		SwitchState* ClonedState;
+		
+		int n ;
+		for( n = 0 ; n < nStates ; n++ )
+		{
+			ClonedState = CurrentState->Clone();
+			StartState->GetPrevious()->InsertSwitchState(ClonedState);
+			CurrentState = CurrentState->GetNext();
+		}
+	}
+}
+
 //////////////////////////////////////////
 // 				Controller				//
 //////////////////////////////////////////
@@ -235,23 +284,40 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 		this->_direction = 1;
 	}
 	
-	this->_startPosition = this->_direction * (offset  - pulsesPerRev);
-	this->_endPosition = this->_direction * offset;
-	this->_overflow = false;
-	this->_switchingDelay = switchingdelay;
-	this->_startup = true;
-	
 	// Calculate error and error correction
 	/* 
-	 * This is done by finding the error on a complete mechenical rev.
+	 * This is done by finding the error on a complete mechanical rev.
 	 * The  number of states the system goes through per mechanical rev is also derived.
 	 * Then, we find the greatest common divider (with the gcd algorithm), divide 
-	 * both of them by this gcd and save the result. Then repeating this untill the gcd
+	 * both of them by this gcd and save the result. Then repeating this until the gcd
 	 * is 1. This gives us the smallest possible integer amount of switching states with 
-	 * the smalles error to correct.
+	 * the smallest error to correct.
 	 */
 	
+	Serial.println("Finding the index pulse in 10 seconds");
+	int i;
+	
+	for( i = 10 ; i > 0 ; i--)
+	{
+		Serial.println(i);
+		this->_inverterStage->ActivateCurrentState();
+		delay(1000);
+	}
+	
+	int oldPosition = this->_encoder->read();
+	
+	do {
+		this->Step();
+		delay(1000);
+		Serial.println(this->_encoder->read());
+	} while(((oldPosition > this->_encoder->read()) && (this->_direction == 1)) || ((oldPosition < this->_encoder->read()) && (this->_direction == -1)));
+
+	Serial.print("Found, current Encoder position: ");
+	Serial.println(this->_encoder->read());
+	
 	Serial.println("Starting the calculations");
+	
+	// Calculates the standard interval size.
 	
 	this->_correctionCondition = eRevPerMRev*nStates;
 	this->_increase = (int) ( (float) pulsesPerRev / (float) this->_correctionCondition );
@@ -281,126 +347,181 @@ Controller::Controller(SwitchState* topState, Encoder* theEncoder, int pulsesPer
 	Serial.print("correctionCondition = ");
 	Serial.println(this->_correctionCondition);
 	
-	// Calibration
-	Serial.println("Starting with calibration in 10 seconds");
-	this->ControllerDelay(10);
-	this->Calibrate();
+	// Expand the number of states
+	Serial.println("Expanding");
+	this->_inverterStage->Expand(eRevPerMRev, nStates);
+	Serial.println("Done expanding");
 	
-	Serial.println("Initial conditions:");
-	Serial.print("startPosition: ");
-	Serial.println(this->_startPosition);
-	Serial.print("endPosition: ");
-	Serial.println(this->_endPosition);
-	Serial.print("Position: ");
-	Serial.println(this->_encoder->read());
+	// Calculate all of the intervals
+	Serial.println("Start setting up the intervals");
 	
-	// Activate the next or previous state, depending on the direction.
-	Serial.println("Starting the motor");
-	Serial.end();
-	this->_switchingTime = millis() + this->_switchingDelay;
-}
-
-void Controller::Logic()
-{
-	// The controller logic.
-	if(this->_startup)
+	SwitchState*  StartState;
+	if(this->_direction == 1)
 	{
-		this->StepperLogic();
+		StartState = this->_inverterStage->GetCurrentState()->GetNext();
 	}
 	else
 	{
-		this->PositionLogic();
+		StartState = this->_inverterStage->GetCurrentState()->GetPrevious();
 	}
-}
-
-void Controller::StepperLogic()
-{
-	// Stepper logic for startup
-	if( millis() >= this->_switchingTime )
+	SwitchState* CurrentState = StartState;
+	
+	int StartPosition = this->_encoder->read() + (this->_direction * offset);
+	if(this->_direction == -1)
 	{
-		this->Step();
-		this->_switchingTime = this->_switchingTime + this->_switchingDelay;
+		if(StartPosition > 0)
+		{
+			StartPosition = -pulsesPerRev + StartPosition;
+		}
+		if( StartPosition < -pulsesPerRev)
+		{
+			StartPosition = StartPosition + pulsesPerRev;
+		}
 	}
+	else
+	{
+		if(StartPosition < 0)
+		{
+			StartPosition = pulsesPerRev + StartPosition;
+		}
+		if( StartPosition > pulsesPerRev)
+		{
+			StartPosition = StartPosition % pulsesPerRev;
+		}
+	}
+	
+	// Loop through all States, starting with the next state
+	do {
+		int NextPosition = (StartPosition + this->_direction * Change());		
+		
+		
+		Serial.print("State ");
+		Serial.print(CurrentState->_statenumber);
+		Serial.print(" interval: ");
+		Serial.print(StartPosition);
+		Serial.print(" - ");
+		
+		if(this->_direction == -1)
+		{
+			if(NextPosition > 0)
+			{
+				NextPosition = -pulsesPerRev + NextPosition;
+			}
+			if( NextPosition < -pulsesPerRev)
+			{
+				NextPosition = NextPosition + pulsesPerRev;
+			}
+			CurrentState->SetInterval(NextPosition, StartPosition);
+			CurrentState = CurrentState->GetPrevious();
+		}
+		else
+		{
+			if(NextPosition < 0)
+			{
+				NextPosition = pulsesPerRev + NextPosition;
+			}
+			if( NextPosition > pulsesPerRev)
+			{
+				NextPosition = NextPosition % pulsesPerRev;
+			}
+			CurrentState->SetInterval(StartPosition, NextPosition);
+			CurrentState = CurrentState->GetNext();
+		}
+		Serial.println(NextPosition);
+		StartPosition = NextPosition;
+	} while( CurrentState != StartState );
+	
+	this->_interval = StartState->GetInterval();
+	
+	Serial.println("Starting");
+	Serial.print("Encoder position: ");
+	Serial.println(this->_encoder->read());
+	Serial.print("Current State: ");
+	Serial.println(this->_inverterStage->GetCurrentState()->_statenumber);
+	Serial.print("Interval: ");
+	Serial.print(this->_interval[0]);
+	Serial.print(" - ");
+	Serial.println(this->_interval[1]);
 }
 
 void Controller::PositionLogic()
 {
-	// It is the differential algorithm
-	
+	// Predefined interval algorithm
 	int position = this->_encoder->read();
-	
-	if(this->_direction == 1)
+	static int scase = -1;
+
+	/* 
+	 * This algorithm works using predefined intervals.
+	 * These intervals are calculated and calibrated on the creation of the controller.
+	 * 
+	 * The algorithm works for both directions because we define the interval to always
+	 * have the lowest number in the first place and the highest number in the second place.
+	 */
+	 
+	if(this->_inverterStage->GetCurrentState()->_exception == true)
 	{
-		// Positive Direction
-		if( this->_overflow )
+		if(( this->_interval[0] <= position )|| ( this->_interval[1] >= position ))
 		{
-			if( position >= this->_endPosition && position < this->_startPosition )
+			/*if( scase != 1 )
 			{
-				this->_inverterStage->ActivateNextState();
-				this->_overflow = this->CalculateNext();
-				Serial.println("Overflow");
-			}
+				Serial.println("First Case");
+				Serial.print("Encoder: ");
+				Serial.println(position);
+				Serial.print("Interval: ");
+				Serial.print(this->_interval[0]);
+				Serial.print(" - ");
+				Serial.println(this->_interval[1]);
+				Serial.print("Current State: ");
+				Serial.println(this->_inverterStage->GetCurrentState()->_statenumber);
+				Serial.print("Interval: ");
+				Serial.print(this->_inverterStage->GetCurrentState()->GetInterval()[0]);
+				Serial.print(" - ");
+				Serial.println(this->_inverterStage->GetCurrentState()->GetInterval()[1]);
+				scase = 1;
+			}*/
+			return;
 		}
-		else if( position >= this->_endPosition || position < this->_startPosition )
+	}
+	else if(( this->_interval[0] <= position ) && ( this->_interval[1] >= position ))
+	{
+		/*if( scase != 2 )
 		{
-			this->_inverterStage->ActivateNextState();
-			this->_overflow = this->CalculateNext();
-		}
+			Serial.println("Second Case");
+			Serial.print("Encoder: ");
+			Serial.println(position);
+			Serial.print("Interval: ");
+			Serial.print(this->_interval[0]);
+			Serial.print(" - ");
+			Serial.println(this->_interval[1]);
+			Serial.print("Current State: ");
+			Serial.println(this->_inverterStage->GetCurrentState()->_statenumber);
+			Serial.print("Interval: ");
+			Serial.print(this->_inverterStage->GetCurrentState()->GetInterval()[0]);
+			Serial.print(" - ");
+			Serial.println(this->_inverterStage->GetCurrentState()->GetInterval()[1]);
+			scase = 2;
+		}*/
 		return;
 	}
-	else if(this->_direction == -1)
-	{
-		// Negative Direction
-		if( this->_overflow )
-		{
-			if( position <= this->_endPosition && position > this->_startPosition )
-			{
-				this->_inverterStage->ActivatePreviousState();
-				this->_overflow = this->CalculateNext();
-				Serial.println("Overflow");
-			}
-		}
-		else if( position <= this->_endPosition || position > this->_startPosition )
-		{
-			this->_inverterStage->ActivatePreviousState();
-			this->_overflow = this->CalculateNext();
-		}
-		return;
-	}
+	
+	/*
+	Serial.println("Switch!");
+	if(this->_inverterStage->GetCurrentState()->_exception) { Serial.println("Exception");}
+	*/
+	
+	this->Step();
+	this->_interval = this->_inverterStage->GetCurrentState()->GetInterval();
 }
 
-bool Controller::CalculateNext()
+int Controller::Change()
 {
-	// Calculate the next step.
-	// bidirectional
-	int change = this->_direction * ( this->_increase + this->Correction() );
-	
-	this->_startPosition = this->_startPosition + change;
-	this->_endPosition = this->_endPosition + change;
-	
-	// Find overflow
-	if( ( this->_direction * this->_endPosition ) < ( this->_direction * this->_startPosition ) )
-	{
-		// Overflow in the positive direction, so endPosition < startPosition
-		// OR overflow in the negative direction, so endPosition > startPosition (or -endPosition < -startPosition)
-		return true;
-	}
-	else
-	{
-		// Otherwise, there is no overflow
-		return false;
-	}
-}
-
-int Controller::Correction()
-{
-	this->_switchingCounter = this->_switchingCounter + 1;
+	this->_switchingCounter++;
 	if(this->_switchingCounter == this->_correctionCondition)
 	{
 		this->_switchingCounter = 0;
-		return this->_error;
+		return (this->_error + this->_increase);
 	}
-	return 0;
+	return this->_increase;
 }
 
 int Controller::gcd(int x, int y)
@@ -411,28 +532,6 @@ int Controller::gcd(int x, int y)
 		return x;
 	}
 	return this->gcd(y, x % y);
-}
-
-bool Controller::Calibrate()
-{
-	int oldPosition = this->_encoder->read();
-	bool calibrate = false;
-	
-	this->_inverterStage->ActivateCurrentState();
-	
-	while( calibrate == false )
-	{
-		this->ControllerDelay(1);
-		
-		if(this->_encoder->read() == oldPosition)
-		{
-			this->_encoder->write(0);
-			calibrate = true;
-		}
-		oldPosition = this->_encoder->read();
-	}
-	//this->_inverterStage->TurnOff();
-	return true;
 }
 
 void Controller::Step()
@@ -447,45 +546,5 @@ void Controller::Step()
 	}
 }
 
-void Controller::ControllerDelay(int secondsDelay)
-{
-	unsigned int startTime = millis();
-	if( secondsDelay < 0 )
-	{
-		secondsDelay = -secondsDelay;
-	}
-	unsigned int endTime = startTime + 1000*secondsDelay;
-	
-	bool delayed = true;
-	while(delayed)
-	{
-		unsigned int currentTime = millis();
-		if(endTime < currentTime && currentTime >= endTime && currentTime < startTime)
-		{
-			delayed = false;
-		}
-		else if(currentTime >= endTime || currentTime < startTime)
-		{
-			delayed = false;
-		}
-	}
-}
 
-void Controller::ToggleStartup()
-{
-	this->_encoder->write(0);
-	
-	this->_startup = !this->_startup;
-		
-	this->_switchingTime = millis() + this->_switchingDelay;
-	
-	if(this->_startup)
-	{
-		Serial.println("To timed control");
-	}
-	else
-	{
-		Serial.println("To position control");
-	}
-	
-}
+
